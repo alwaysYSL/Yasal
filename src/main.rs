@@ -1,8 +1,7 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 use eframe::egui;
 use raw_window_handle::HasWindowHandle;
 use std::sync::Arc;
+use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 use yasal::app::YasalApp;
 use yasal::config::AppConfig;
 use yasal::core::dispatcher::Dispatcher;
@@ -14,7 +13,12 @@ use yasal::plugins::shell_command::ShellCommandPlugin;
 use yasal::plugins::system_commands::SystemCommandsPlugin;
 use yasal::plugins::web_search::WebSearchPlugin;
 
-fn main() -> Result<(), eframe::Error> {
+fn main() {
+    // Initialize Windows COM library for system tray & shell APIs
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    }
+
     let config = AppConfig::load();
     let mut dispatcher = Dispatcher::new();
 
@@ -38,8 +42,21 @@ fn main() -> Result<(), eframe::Error> {
         dispatcher.register(Arc::new(SystemCommandsPlugin::new()));
     }
 
-    let hotkey = HotkeyManager::new_alt_space().ok();
-    let tray = TrayManager::new().ok();
+    let hotkey = match HotkeyManager::new_alt_space() {
+        Ok(h) => Some(h),
+        Err(e) => {
+            eprintln!("Peringatan: Gagal mendaftarkan hotkey Alt+Space: {}", e);
+            None
+        }
+    };
+
+    let tray = match TrayManager::new() {
+        Ok(t) => Some(t),
+        Err(e) => {
+            eprintln!("Peringatan: Gagal membuat system tray: {}", e);
+            None
+        }
+    };
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -55,11 +72,10 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
 
-    eframe::run_native(
+    if let Err(err) = eframe::run_native(
         "Yasal",
         native_options,
         Box::new(move |cc| {
-            // Apply Acrylic blur effect if supported on Windows
             #[cfg(target_os = "windows")]
             {
                 if let Ok(handle) = cc.window_handle() {
@@ -71,5 +87,7 @@ fn main() -> Result<(), eframe::Error> {
                 cc, config, dispatcher, hotkey, tray,
             )))
         }),
-    )
+    ) {
+        eprintln!("Error saat menjalankan eframe: {:?}", err);
+    }
 }
