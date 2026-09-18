@@ -21,25 +21,30 @@ impl YasalTheme {
             Self {
                 is_dark: true,
                 accent_color,
-                bg_color: Color32::from_rgba_premultiplied(28, 28, 30, 220),
-                surface_color: Color32::from_rgba_premultiplied(40, 40, 43, 200),
-                hover_color: Color32::from_rgba_premultiplied(55, 55, 60, 180),
-                selection_color: Color32::from_rgba_premultiplied(r.saturating_div(4), g.saturating_div(4), b.saturating_div(4), 160),
-                text_primary: Color32::from_rgb(240, 240, 245),
-                text_secondary: Color32::from_rgb(160, 160, 170),
-                border_color: Color32::from_rgba_premultiplied(70, 70, 75, 120),
+                bg_color: Color32::from_rgb(30, 31, 34),
+                surface_color: Color32::from_rgb(43, 45, 49),
+                hover_color: Color32::from_rgb(53, 56, 62),
+                selection_color: Color32::from_rgba_premultiplied(
+                    r.saturating_div(3),
+                    g.saturating_div(3),
+                    b.saturating_div(3),
+                    180,
+                ),
+                text_primary: Color32::from_rgb(242, 243, 245),
+                text_secondary: Color32::from_rgb(160, 165, 175),
+                border_color: Color32::from_rgb(65, 68, 75),
             }
         } else {
             Self {
                 is_dark: false,
                 accent_color,
-                bg_color: Color32::from_rgba_premultiplied(245, 245, 247, 230),
-                surface_color: Color32::from_rgba_premultiplied(235, 235, 240, 220),
-                hover_color: Color32::from_rgba_premultiplied(225, 225, 232, 200),
-                selection_color: Color32::from_rgba_premultiplied(r, g, b, 50),
-                text_primary: Color32::from_rgb(25, 25, 30),
-                text_secondary: Color32::from_rgb(105, 105, 115),
-                border_color: Color32::from_rgba_premultiplied(200, 200, 210, 150),
+                bg_color: Color32::from_rgb(248, 249, 251),
+                surface_color: Color32::from_rgb(238, 240, 244),
+                hover_color: Color32::from_rgb(228, 231, 237),
+                selection_color: Color32::from_rgba_premultiplied(r, g, b, 45),
+                text_primary: Color32::from_rgb(24, 25, 28),
+                text_secondary: Color32::from_rgb(110, 115, 125),
+                border_color: Color32::from_rgb(215, 218, 226),
             }
         }
     }
