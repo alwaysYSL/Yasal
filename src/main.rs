@@ -1,5 +1,7 @@
 use eframe::egui;
 use raw_window_handle::HasWindowHandle;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::sync::Arc;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 use yasal::app::YasalApp;
@@ -13,7 +15,24 @@ use yasal::plugins::shell_command::ShellCommandPlugin;
 use yasal::plugins::system_commands::SystemCommandsPlugin;
 use yasal::plugins::web_search::WebSearchPlugin;
 
+fn log_msg(msg: &str) {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("yasal_debug.log")
+    {
+        let _ = writeln!(file, "[{}] {}", chrono::Local::now().format("%H:%M:%S%.3f"), msg);
+    }
+}
+
 fn main() {
+    log_msg("=== Yasal Starting ===");
+
+    // Set panic hook to log any panics to file
+    std::panic::set_hook(Box::new(|info| {
+        log_msg(&format!("PANIC: {:?}", info));
+    }));
+
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
@@ -53,10 +72,14 @@ fn main() {
         ..Default::default()
     };
 
+    log_msg("Calling eframe::run_native...");
+
     if let Err(err) = eframe::run_native(
         "Yasal",
         native_options,
         Box::new(move |cc| {
+            log_msg("eframe creation context initialized");
+
             #[cfg(target_os = "windows")]
             {
                 if let Ok(handle) = cc.window_handle() {
@@ -64,17 +87,18 @@ fn main() {
                 }
             }
 
-            // Register global hotkey listener with egui context for wakeup interrupts
             let hotkey = HotkeyManager::new(cc.egui_ctx.clone()).ok();
-
-            // Create system tray icon inside window creation context
             let tray = TrayManager::new().ok();
+
+            log_msg("YasalApp created successfully");
 
             Ok(Box::new(YasalApp::new(
                 cc, config, dispatcher, hotkey, tray,
             )))
         }),
     ) {
-        eprintln!("Error eframe::run_native: {:#?}", err);
+        log_msg(&format!("eframe::run_native error: {:?}", err));
     }
+
+    log_msg("=== Yasal Exited ===");
 }
