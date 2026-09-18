@@ -63,6 +63,7 @@ impl YasalApp {
             self.update_query();
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
         } else {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             // Memory trimming on window hide -> RAM drops to < 5 MB
@@ -216,125 +217,131 @@ impl eframe::App for YasalApp {
         theme.apply(ctx);
 
         // Render Command Palette Window
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.spacing_mut().item_spacing = egui::Vec2::new(0.0, 8.0);
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none().fill(theme.bg_color).inner_margin(egui::Margin::same(12.0)))
+            .show(ctx, |ui| {
+                ui.spacing_mut().item_spacing = egui::Vec2::new(0.0, 8.0);
 
-            // 1. Search Bar
-            let mode_icon = match self.view_mode {
-                ViewMode::ActionPanel => "action_panel",
-                ViewMode::Settings => "settings",
-                ViewMode::Search => self.dispatcher.detect_mode_icon(&self.search_state.text),
-            };
+                // 1. Search Bar
+                let mode_icon = match self.view_mode {
+                    ViewMode::ActionPanel => "action_panel",
+                    ViewMode::Settings => "settings",
+                    ViewMode::Search => self.dispatcher.detect_mode_icon(&self.search_state.text),
+                };
 
-            let breadcrumb = if let ViewMode::ActionPanel = self.view_mode {
-                self.action_panel_item.as_ref().map(|i| i.title.as_str())
-            } else {
-                None
-            };
+                let breadcrumb = if let ViewMode::ActionPanel = self.view_mode {
+                    self.action_panel_item.as_ref().map(|i| i.title.as_str())
+                } else {
+                    None
+                };
 
-            let sb_action = render_search_bar(ui, &theme, &mut self.search_state, mode_icon, breadcrumb);
+                let sb_action = render_search_bar(ui, &theme, &mut self.search_state, mode_icon, breadcrumb);
 
-            match sb_action {
-                SearchBarAction::TextChanged => self.update_query(),
-                SearchBarAction::Submit => self.execute_selected(ctx),
-                SearchBarAction::SecondaryAction => self.execute_secondary(ctx),
-                SearchBarAction::OpenActionPanel => self.open_action_panel(),
-                SearchBarAction::EscapePressed => self.handle_escape(ctx),
-                SearchBarAction::NavigateUp => match self.view_mode {
+                match sb_action {
+                    SearchBarAction::TextChanged => self.update_query(),
+                    SearchBarAction::Submit => self.execute_selected(ctx),
+                    SearchBarAction::SecondaryAction => self.execute_secondary(ctx),
+                    SearchBarAction::OpenActionPanel => self.open_action_panel(),
+                    SearchBarAction::EscapePressed => self.handle_escape(ctx),
+                    SearchBarAction::NavigateUp => match self.view_mode {
+                        ViewMode::Search => {
+                            if self.selected_index > 0 {
+                                self.selected_index -= 1;
+                            }
+                        }
+                        ViewMode::ActionPanel => {
+                            if self.action_panel_index > 0 {
+                                self.action_panel_index -= 1;
+                            }
+                        }
+                        ViewMode::Settings => {
+                            if self.settings_index > 0 {
+                                self.settings_index -= 1;
+                            }
+                        }
+                    },
+                    SearchBarAction::NavigateDown => match self.view_mode {
+                        ViewMode::Search => {
+                            if !self.results.is_empty() && self.selected_index + 1 < self.results.len() {
+                                self.selected_index += 1;
+                            }
+                        }
+                        ViewMode::ActionPanel => {
+                            if let Some(ref item) = self.action_panel_item {
+                                if self.action_panel_index + 1 < item.additional_actions.len() {
+                                    self.action_panel_index += 1;
+                                }
+                            }
+                        }
+                        ViewMode::Settings => {
+                            self.settings_index += 1;
+                        }
+                    },
+                    SearchBarAction::None => {}
+                }
+
+                // 2. Results / Content Area
+                match self.view_mode {
                     ViewMode::Search => {
-                        if self.selected_index > 0 {
-                            self.selected_index -= 1;
-                        }
-                    }
-                    ViewMode::ActionPanel => {
-                        if self.action_panel_index > 0 {
-                            self.action_panel_index -= 1;
-                        }
-                    }
-                    ViewMode::Settings => {
-                        if self.settings_index > 0 {
-                            self.settings_index -= 1;
-                        }
-                    }
-                },
-                SearchBarAction::NavigateDown => match self.view_mode {
-                    ViewMode::Search => {
-                        if !self.results.is_empty() && self.selected_index + 1 < self.results.len() {
-                            self.selected_index += 1;
+                        if let Some(action) = render_result_list(ui, &theme, &self.results, self.selected_index) {
+                            match action {
+                                ResultListAction::Select(idx) => self.selected_index = idx,
+                                ResultListAction::Execute(idx) => {
+                                    self.selected_index = idx;
+                                    self.execute_selected(ctx);
+                                }
+                            }
                         }
                     }
                     ViewMode::ActionPanel => {
                         if let Some(ref item) = self.action_panel_item {
-                            if self.action_panel_index + 1 < item.additional_actions.len() {
-                                self.action_panel_index += 1;
+                            if let Some(event) = render_action_panel(
+                                ui,
+                                &theme,
+                                &item.additional_actions,
+                                self.action_panel_index,
+                            ) {
+                                match event {
+                                    ActionPanelEvent::Select(idx) => self.action_panel_index = idx,
+                                    ActionPanelEvent::Execute(idx) => {
+                                        self.action_panel_index = idx;
+                                        self.execute_selected(ctx);
+                                    }
+                                    ActionPanelEvent::Close => self.handle_escape(ctx),
+                                }
                             }
                         }
                     }
                     ViewMode::Settings => {
-                        self.settings_index += 1;
-                    }
-                },
-                SearchBarAction::None => {}
-            }
-
-            // 2. Results / Content Area
-            match self.view_mode {
-                ViewMode::Search => {
-                    if let Some(action) = render_result_list(ui, &theme, &self.results, self.selected_index) {
-                        match action {
-                            ResultListAction::Select(idx) => self.selected_index = idx,
-                            ResultListAction::Execute(idx) => {
-                                self.selected_index = idx;
-                                self.execute_selected(ctx);
-                            }
-                        }
-                    }
-                }
-                ViewMode::ActionPanel => {
-                    if let Some(ref item) = self.action_panel_item {
-                        if let Some(event) = render_action_panel(
+                        if let Some(event) = render_settings_view(
                             ui,
                             &theme,
-                            &item.additional_actions,
-                            self.action_panel_index,
+                            &mut self.config,
+                            &self.search_state.text,
+                            self.settings_index,
                         ) {
                             match event {
-                                ActionPanelEvent::Select(idx) => self.action_panel_index = idx,
-                                ActionPanelEvent::Execute(idx) => {
-                                    self.action_panel_index = idx;
-                                    self.execute_selected(ctx);
+                                SettingsViewEvent::Select(idx) => self.settings_index = idx,
+                                SettingsViewEvent::Toggle(idx) => {
+                                    self.settings_index = idx;
+                                    toggle_setting_at(&mut self.config, idx, &self.search_state.text);
                                 }
-                                ActionPanelEvent::Close => self.handle_escape(ctx),
+                                SettingsViewEvent::Close => self.handle_escape(ctx),
                             }
                         }
                     }
                 }
-                ViewMode::Settings => {
-                    if let Some(event) = render_settings_view(
-                        ui,
-                        &theme,
-                        &mut self.config,
-                        &self.search_state.text,
-                        self.settings_index,
-                    ) {
-                        match event {
-                            SettingsViewEvent::Select(idx) => self.settings_index = idx,
-                            SettingsViewEvent::Toggle(idx) => {
-                                self.settings_index = idx;
-                                toggle_setting_at(&mut self.config, idx, &self.search_state.text);
-                            }
-                            SettingsViewEvent::Close => self.handle_escape(ctx),
-                        }
-                    }
-                }
-            }
 
-            // 3. Status Bar
-            let selected_category = self.results.get(self.selected_index).map(|r| r.category.as_str());
-            render_status_bar(ui, &theme, &self.view_mode, selected_category);
-        });
+                // 3. Status Bar
+                let selected_category = self.results.get(self.selected_index).map(|r| r.category.as_str());
+                render_status_bar(ui, &theme, &self.view_mode, selected_category);
+            });
 
-        // Request low refresh rate while idling to keep CPU at ~0%
-        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        // Fast polling rate so global hotkey is caught instantly
+        if self.is_visible {
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        } else {
+            ctx.request_repaint_after(std::time::Duration::from_millis(35));
+        }
     }
 }
