@@ -40,22 +40,6 @@ fn main() {
         dispatcher.register(Arc::new(SystemCommandsPlugin::new()));
     }
 
-    let hotkey = match HotkeyManager::new_alt_space() {
-        Ok(h) => Some(h),
-        Err(e) => {
-            eprintln!("Peringatan: Gagal mendaftarkan hotkey Alt+Space: {}", e);
-            None
-        }
-    };
-
-    let tray = match TrayManager::new() {
-        Ok(t) => Some(t),
-        Err(e) => {
-            eprintln!("Peringatan: Gagal membuat system tray: {}", e);
-            None
-        }
-    };
-
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("🌸 Yasal")
@@ -79,6 +63,12 @@ fn main() {
                     let _ = window_vibrancy::apply_acrylic(&handle, Some((20, 20, 20, 200)));
                 }
             }
+
+            // Register global hotkey listener with egui context for wakeup interrupts
+            let hotkey = HotkeyManager::new(cc.egui_ctx.clone()).ok();
+
+            // Create system tray icon inside window creation context
+            let tray = TrayManager::new().ok();
 
             Ok(Box::new(YasalApp::new(
                 cc, config, dispatcher, hotkey, tray,
