@@ -11,6 +11,18 @@ use crate::ui::search_bar::{render_search_bar, SearchBarAction, SearchBarState};
 use crate::ui::settings_view::{render_settings_view, toggle_setting_at, SettingsViewEvent};
 use crate::ui::status_bar::{render_status_bar, ViewMode};
 use eframe::egui;
+use std::fs::OpenOptions;
+use std::io::Write;
+
+fn log_app(msg: &str) {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("yasal_debug.log")
+    {
+        let _ = writeln!(file, "[{}] {}", chrono::Local::now().format("%H:%M:%S%.3f"), msg);
+    }
+}
 
 pub struct YasalApp {
     pub config: AppConfig,
@@ -55,8 +67,8 @@ impl YasalApp {
 
     pub fn toggle_visibility(&mut self, ctx: &egui::Context) {
         self.is_visible = !self.is_visible;
+        log_app(&format!("toggle_visibility: is_visible={}", self.is_visible));
         if self.is_visible {
-            // Fresh input reset when opening
             self.search_state.text.clear();
             self.search_state.request_focus = true;
             self.view_mode = ViewMode::Search;
@@ -66,7 +78,6 @@ impl YasalApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
         } else {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            // Memory trimming on window hide -> RAM drops to < 5 MB
             win32::trim_memory();
         }
     }
@@ -91,7 +102,6 @@ impl YasalApp {
         }
 
         if matches!(self.view_mode, ViewMode::Settings) && !self.search_state.text.trim().is_empty() {
-            // In settings filtering mode
             return;
         }
 
@@ -168,7 +178,6 @@ impl YasalApp {
                 self.update_query();
             }
             ViewMode::Search => {
-                // 2-Step Escape: If text is present, clear text; otherwise close window
                 if !self.search_state.text.is_empty() {
                     self.search_state.text.clear();
                     self.update_query();
@@ -185,6 +194,7 @@ impl eframe::App for YasalApp {
         // Poll Global Hotkey
         if let Some(ref hotkey) = self.hotkey {
             if hotkey.poll_is_pressed() {
+                log_app("Hotkey pressed event detected!");
                 self.toggle_visibility(ctx);
             }
         }
@@ -337,7 +347,6 @@ impl eframe::App for YasalApp {
                 render_status_bar(ui, &theme, &self.view_mode, selected_category);
             });
 
-        // Fast polling rate so global hotkey is caught instantly
         if self.is_visible {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         } else {
