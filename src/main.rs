@@ -14,7 +14,6 @@ use yasal::plugins::system_commands::SystemCommandsPlugin;
 use yasal::plugins::web_search::WebSearchPlugin;
 
 fn main() {
-    // Initialize Windows COM library for system tray & shell APIs
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
@@ -22,7 +21,6 @@ fn main() {
     let config = AppConfig::load();
     let mut dispatcher = Dispatcher::new();
 
-    // Register active plugins
     let app_launcher = Arc::new(AppLauncherPlugin::new());
     dispatcher.register(app_launcher);
 
@@ -66,7 +64,6 @@ fn main() {
             .with_max_inner_size([650.0, 420.0])
             .with_resizable(false)
             .with_decorations(false)
-            .with_transparent(true)
             .with_always_on_top()
             .with_active(true),
         ..Default::default()
@@ -88,6 +85,6 @@ fn main() {
             )))
         }),
     ) {
-        eprintln!("Error saat menjalankan eframe: {:?}", err);
+        eprintln!("Error eframe::run_native: {:#?}", err);
     }
 }
