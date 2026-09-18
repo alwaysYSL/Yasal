@@ -1,5 +1,5 @@
 use windows::core::HSTRING;
-use windows::Win32::Foundation::BOOL;
+use windows::Win32::Foundation::{BOOL, HWND};
 use windows::Win32::Graphics::Dwm::DwmGetColorizationColor;
 use windows::Win32::System::Power::SetSuspendState;
 use windows::Win32::System::ProcessStatus::EmptyWorkingSet;
@@ -11,9 +11,11 @@ use windows::Win32::System::Shutdown::{
     SHUTDOWN_REASON,
 };
 use windows::Win32::System::Threading::GetCurrentProcess;
+use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
 use windows::Win32::UI::Shell::{SHEmptyRecycleBinW, SHERB_NOCONFIRMATION, SHERB_NOPROGRESSUI};
 use windows::Win32::UI::WindowsAndMessaging::{
-    MessageBoxW, IDOK, MB_ICONWARNING, MB_OKCANCEL,
+    BringWindowToTop, MessageBoxW, SetForegroundWindow, ShowWindow, IDOK, MB_ICONWARNING,
+    MB_OKCANCEL, SW_HIDE, SW_SHOW,
 };
 
 /// Forces Windows to trim the process working set, dropping unused RAM pages.
@@ -22,6 +24,31 @@ pub fn trim_memory() {
     unsafe {
         let _ = EmptyWorkingSet(GetCurrentProcess());
     }
+}
+
+/// Activates and brings the specified Win32 window to the foreground.
+pub fn show_and_focus_window(hwnd_raw: isize) {
+    if hwnd_raw == 0 {
+        return;
+    }
+    unsafe {
+        let hwnd = HWND(hwnd_raw as *mut _);
+        let _ = ShowWindow(hwnd, SW_SHOW);
+        let _ = BringWindowToTop(hwnd);
+        let _ = SetForegroundWindow(hwnd);
+        let _ = SetFocus(hwnd);
+    }
+}
+
+/// Hides the specified Win32 window and trims working set memory immediately.
+pub fn hide_window(hwnd_raw: isize) {
+    if hwnd_raw != 0 {
+        unsafe {
+            let hwnd = HWND(hwnd_raw as *mut _);
+            let _ = ShowWindow(hwnd, SW_HIDE);
+        }
+    }
+    trim_memory();
 }
 
 /// Retrieves the active Windows accent color in RGB format.

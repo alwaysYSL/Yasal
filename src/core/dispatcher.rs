@@ -80,6 +80,14 @@ impl Dispatcher {
     fn get_empty_state_results(&self) -> Vec<QueryResult> {
         let top_ids = self.frecency.get_top_frequent(5);
         if top_ids.is_empty() {
+            // When frecency history is empty on first run, show the first 5 indexed apps
+            for plugin in &self.plugins {
+                if plugin.id() == "app_launcher" {
+                    let mut apps = plugin.query("");
+                    apps.truncate(5);
+                    return apps;
+                }
+            }
             return Vec::new();
         }
 
