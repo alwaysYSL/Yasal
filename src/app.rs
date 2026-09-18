@@ -29,6 +29,7 @@ pub struct YasalApp {
     pub dispatcher: Dispatcher,
     pub hotkey: Option<HotkeyManager>,
     pub tray: Option<TrayManager>,
+    pub hwnd: isize,
     pub search_state: SearchBarState,
     pub results: Vec<QueryResult>,
     pub selected_index: usize,
@@ -46,12 +47,14 @@ impl YasalApp {
         dispatcher: Dispatcher,
         hotkey: Option<HotkeyManager>,
         tray: Option<TrayManager>,
+        hwnd: isize,
     ) -> Self {
         let mut app = Self {
             config,
             dispatcher,
             hotkey,
             tray,
+            hwnd,
             search_state: SearchBarState::default(),
             results: Vec::new(),
             selected_index: 0,
@@ -76,9 +79,16 @@ impl YasalApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+            if self.hwnd != 0 {
+                win32::show_and_focus_window(self.hwnd);
+            }
         } else {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            win32::trim_memory();
+            if self.hwnd != 0 {
+                win32::hide_window(self.hwnd);
+            } else {
+                win32::trim_memory();
+            }
         }
     }
 

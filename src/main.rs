@@ -80,10 +80,16 @@ fn main() {
         Box::new(move |cc| {
             log_msg("eframe creation context initialized");
 
+            let mut window_hwnd: isize = 0;
             #[cfg(target_os = "windows")]
             {
                 if let Ok(handle) = cc.window_handle() {
                     let _ = window_vibrancy::apply_acrylic(&handle, Some((20, 20, 20, 200)));
+                    if let raw_window_handle::RawWindowHandle::Win32(win32_handle) = handle.as_raw() {
+                        window_hwnd = win32_handle.hwnd.get();
+                        HotkeyManager::set_window_hwnd(window_hwnd);
+                        log_msg(&format!("Window HWND acquired: 0x{:X}", window_hwnd));
+                    }
                 }
             }
 
@@ -93,7 +99,7 @@ fn main() {
             log_msg("YasalApp created successfully");
 
             Ok(Box::new(YasalApp::new(
-                cc, config, dispatcher, hotkey, tray,
+                cc, config, dispatcher, hotkey, tray, window_hwnd,
             )))
         }),
     ) {
