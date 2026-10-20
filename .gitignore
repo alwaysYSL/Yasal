@@ -3,3 +3,6 @@
 *.pdb
 .DS_Store
 Thumbs.db
+
+# Runtime debug logs
+*.log

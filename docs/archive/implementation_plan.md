@@ -15,10 +15,10 @@ Command palette ultra-ringan untuk Windows, dibangun dengan **Rust**. Pengganti 
 > **Hotkey**: Default `Alt + Space` — **configurable** dari Settings. User bisa ganti ke kombinasi apapun (Ctrl+Space, Win+Alt+Space, dll). `RegisterHotKey` mengintercept di level OS sehingga tidak konflik dengan app manapun.
 
 > [!NOTE]
-> **File Search**: Menggunakan **[Everything](https://www.voidtools.com/)** by voidtools sebagai backend (gratis, ~15 MB RAM, indexing instan via NTFS journal). Jika Everything tidak terinstall → fallback ke `walkdir` scan direktori umum.
+> **File Search**: Menggunakan **[Everything](https://www.voidtools.com/)** melalui `es.exe` bila tersedia. Jika tidak, Yasal membuat indeks terbatas dari direktori umum saat pencarian pertama.
 
 > [!NOTE]
-> **Color Picker**: Ditunda ke **Phase 2**. Phase 1 fokus fitur text-based.
+> **Color Picker**: Ditunda ke **Phase 3** karena memerlukan overlay dan interaksi layar tersendiri.
 
 ---
 
@@ -101,14 +101,13 @@ windows = { version = "0.58", features = [
 # === Search & Matching ===
 nucleo-matcher = "0.3"               # Fuzzy matching (from Helix editor)
 walkdir = "2.5"                      # Start Menu recursive scan
-everything-ipc = "0.2"              # voidtools Everything file search
+# Everything diakses lewat es.exe (klien IPC resmi), tanpa dependensi tambahan
 
 # === Calculator ===
 evalexpr = "11.3"                    # Math expression parser
 
 # === Clipboard ===
-clipboard-master = "4.0"            # Clipboard change listener
-arboard = "3.4"                      # Clipboard read/write
+# Clipboard memakai Win32 WM_CLIPBOARDUPDATE dan API clipboard langsung
 
 # === Utilities ===
 serde = { version = "1", features = ["derive"] }
@@ -174,7 +173,7 @@ yasal/
 │   │   ├── win_settings.rs           # #5  ms-settings: navigation
 │   │   ├── shell_command.rs          # #6  Run shell commands
 │   │   ├── calculator.rs             # #8  Math expressions
-│   │   ├── color_picker.rs           # #15 Screen color picker (Phase 2)
+│   │   ├── color_picker.rs           # #15 Screen color picker (Phase 3)
 │   │   ├── system_commands.rs        # #16-21 Shutdown/restart/lock/sleep/etc
 │   │   ├── network_info.rs           # #24 IP/Network info
 │   │   └── clipboard_history.rs      # #25 Clipboard history
@@ -253,13 +252,14 @@ Action:   Launch app via ShellExecuteW or explorer.exe shell:AppsFolder\{aumid}
 
 ```
 Trigger:  Prefix "file " atau global fallback
-Backend:  Everything IPC (voidtools)
-Latency:  1-5ms per query
+Backend:  Everything via es.exe (klien IPC voidtools), fallback indeks lokal
+Latency:  debounce 150ms; kerja I/O di thread latar belakang
 Action:   Open file/folder atau reveal in Explorer
 ```
 
-- Jika Everything tidak terinstall → fallback ke `walkdir` scan `Documents`, `Desktop`, `Downloads`
-- Pencarian real-time saat user mengetik (debounce 150ms)
+- Jika Everything/es.exe tidak tersedia → fallback scan `Documents`, `Desktop`, `Downloads`
+- Indeks fallback baru dibuat saat dibutuhkan, dibatasi 15.000 entri atau 4 MB path
+- Pencarian di worker tunggal dengan debounce 150ms; hasil query lama diabaikan
 
 ---
 
@@ -349,26 +349,26 @@ Action:   Copy IP to clipboard
 ```
 
 - Tampilkan: Local IPv4, Public IP (via API), MAC address, gateway
-- Public IP fetch: simple HTTP GET ke `https://api.ipify.org`
+- Public IP fetch: HTTP GET ke `https://api.ipify.org` saat query pertama; cache 60 detik, tanpa polling saat idle
 
 ---
 
 #### 10. Plugin: Clipboard History (`clipboard_history.rs`)
 
 ```
-Trigger:  Prefix "cb " atau hotkey Ctrl+Shift+V (dari palette)
+Trigger:  Prefix "cb "
 Storage:  In-memory ring buffer (max 50 entries)
-Action:   Paste selected item
+Action:   Copy selected item kembali ke clipboard
 ```
 
-- Background thread monitor via `clipboard-master` (`WM_CLIPBOARDUPDATE`)
+- Background thread monitor via Win32 `WM_CLIPBOARDUPDATE`; berhenti saat plugin dinonaktifkan
 - Deduplicate consecutive identical copies
 - Tampilkan preview (truncated 80 chars) + timestamp
-- History persist ke JSON file (optional, configurable)
+- Riwayat hanya di memori; persistensi riwayat belum menjadi bagian Fase 2
 
 ---
 
-#### 11. Color Picker (`color_picker.rs`) — Phase 2
+#### 11. Color Picker (`color_picker.rs`) — Phase 3
 
 ```
 Trigger:  Prefix "color" atau dedicated hotkey
@@ -378,7 +378,7 @@ Action:   Enter pick mode → klik screen → copy HEX/RGB
 - Win32 GDI: `GetDC(0)` + `GetPixel(hdc, x, y)`
 - Tampilkan: HEX, RGB, HSL
 - Magnifier loupe (5x zoom grid) di sekitar cursor
-- Di-delay ke Phase 2 karena butuh overlay rendering khusus
+- Di-delay ke Phase 3 karena butuh overlay rendering khusus
 
 ---
 
@@ -431,12 +431,12 @@ Action:   Enter pick mode → klik screen → copy HEX/RGB
 - [ ] Shell Command runner
 
 #### Phase 2 — Extended Features (Minggu 3-4)
-- [ ] File Search (Everything IPC integration)
-- [ ] Windows Settings navigation
-- [ ] Clipboard History
-- [ ] Network Info
-- [ ] Settings UI (configure hotkey, theme, enabled plugins)
-- [ ] Persist config to JSON file
+- [x] File Search (Everything via es.exe IPC client, fallback lokal, debounce)
+- [x] Windows Settings navigation
+- [x] Clipboard History
+- [x] Network Info
+- [x] Settings UI (pilihan hotkey, tema, plugin aktif)
+- [x] Persist config to JSON file
 
 #### Phase 3 — Polish (Minggu 5+)
 - [ ] Color Picker with magnifier overlay
