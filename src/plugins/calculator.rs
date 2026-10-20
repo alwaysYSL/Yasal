@@ -15,7 +15,9 @@ impl CalculatorPlugin {
             return false;
         }
         let has_digit = trimmed.chars().any(|c| c.is_ascii_digit());
-        let has_math_op = trimmed.chars().any(|c| matches!(c, '+' | '-' | '*' | '/' | '^' | '%'));
+        let has_math_op = trimmed
+            .chars()
+            .any(|c| matches!(c, '+' | '-' | '*' | '/' | '^' | '%'));
         has_digit && has_math_op
     }
 }
@@ -65,7 +67,10 @@ impl Plugin for CalculatorPlugin {
             return vec![QueryResult {
                 id: format!("calc:{}", result_str),
                 title: format!("= {}", result_str),
-                subtitle: Some(format!("Ekspresi: {} (Tekan Enter untuk salin)", clean_expr)),
+                subtitle: Some(format!(
+                    "Ekspresi: {} (Tekan Enter untuk salin)",
+                    clean_expr
+                )),
                 category: "Kalkulator".to_string(),
                 icon: ItemIcon::Symbolic("calc"),
                 score: 950, // High priority when math is valid

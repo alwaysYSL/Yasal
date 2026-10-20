@@ -1,4 +1,4 @@
-pub mod plugin;
-pub mod matcher;
-pub mod frecency;
 pub mod dispatcher;
+pub mod frecency;
+pub mod matcher;
+pub mod plugin;

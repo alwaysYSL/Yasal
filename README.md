@@ -30,11 +30,24 @@
 - 🛡️ **Perintah Sistem Windows**:
   - Kunci Layar (*Lock*), Mode Tidur (*Sleep*), Kosongkan Recycle Bin, Matikan Komputer (*Shutdown*), Mulai Ulang (*Restart*), dan Keluar Akun (*Sign Out*) disertai konfirmasi native.
 - ⚙️ **Built-in Settings View**:
-  - Ketik `settings` di search bar untuk membuka menu pengaturan interaktif (40px uniform list) tanpa mouse.
+  - Ketik `settings` di search bar untuk membuka menu pengaturan interaktif dengan baris 44px dan jarak 4px tanpa mouse.
 - 🎨 **Sinkronisasi Tema Windows**:
   - Otomatis mengikuti Dark/Light mode Windows dan Accent Color DWM aktif secara real-time.
 - 🧠 **Memory Trimming Otomatis**:
   - Memanfaatkan `EmptyWorkingSet` Win32 API saat window di-hide sehingga konsumsi RAM turun menjadi **< 5 MB**.
+
+---
+
+## 🔎 Fitur Phase 2
+
+- **Pencarian file**: gunakan `file <query>`, atau ketik nama file saat tidak ada hasil lokal lain. Yasal memakai Everything `es.exe` jika tersedia; jika tidak, Documents, Desktop, dan Downloads diindeks saat pencarian pertama. Pencarian berjalan di background dengan debounce 150 ms.
+- **Pengalih jendela**: gunakan `w` untuk melihat semua jendela terbuka (yang terakhir dipakai di atas), atau `w <teks>` untuk memfilter berdasarkan judul atau nama program. `Enter` berpindah ke jendela itu dan memulihkannya jika diminimalkan; `Tab` membuka aksi `Tutup jendela`.
+- **Posisi jendela**: palette muncul di monitor tempat kursor mouse berada, di tengah secara horizontal dan sedikit di atas tengah secara vertikal, dengan tepi atas yang selalu sama berapa pun jumlah hasilnya.
+- **Navigasi Pengaturan Windows**: gunakan `$ <query>`, misalnya `$ bluetooth`, `$ display`, atau `$ update`.
+- **Riwayat clipboard**: gunakan `cb` atau `cb <query>`. Enter menyalin item terpilih kembali ke clipboard. Maksimal 50 teks terbaru disimpan hanya di memori; listener berhenti dan riwayat dibersihkan saat plugin dimatikan.
+- **Informasi jaringan**: gunakan `ip` atau `network` untuk IPv4 lokal, gateway, alamat MAC, dan IP publik.
+  - Pengambilan IP publik mengirim request background ke `https://api.ipify.org` saat query pertama, lalu menyimpan hasil hingga 60 detik.
+- Semua plugin Phase 2 dapat diaktifkan atau dinonaktifkan langsung melalui view `settings`. Pintasan global memiliki enam pilihan (tekan `Enter` pada barisnya untuk berganti) dan langsung aktif tanpa memulai ulang Yasal. Jika kombinasinya dipakai aplikasi lain, pilihan berikutnya dicoba otomatis.
 
 ---
 
@@ -71,7 +84,7 @@ cargo test
 ```bash
 cargo build --release
 ```
-Biner berekstensi `.exe` mandiri (~5 MB) akan tersedia di `target/release/yasal.exe`.
+Biner berekstensi `.exe` mandiri tersedia di `target/x86_64-pc-windows-gnu/release/yasal.exe`.
 
 ---
 

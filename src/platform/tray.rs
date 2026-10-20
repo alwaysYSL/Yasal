@@ -1,3 +1,6 @@
+use crate::platform::win32;
+use egui::Context;
+use std::sync::mpsc::{self, Receiver};
 use tray_icon::{
     menu::{Menu, MenuEvent, MenuItem},
     Icon, TrayIcon, TrayIconBuilder,
@@ -12,13 +15,14 @@ pub enum TrayAction {
 
 pub struct TrayManager {
     _tray_icon: TrayIcon,
-    show_item: MenuItem,
-    settings_item: MenuItem,
-    exit_item: MenuItem,
+    _show_item: MenuItem,
+    _settings_item: MenuItem,
+    _exit_item: MenuItem,
+    action_receiver: Receiver<TrayAction>,
 }
 
 impl TrayManager {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(ctx: Context, hwnd: isize) -> Result<Self, Box<dyn std::error::Error>> {
         let menu = Menu::new();
         let show_item = MenuItem::new("Show Yasal (Alt+Space)", true, None);
         let settings_item = MenuItem::new("Settings", true, None);
@@ -50,27 +54,41 @@ impl TrayManager {
         let tray_icon = TrayIconBuilder::new()
             .with_icon(icon)
             .with_menu(Box::new(menu))
-            .with_tooltip("🌸 Yasal — Command Palette")
+            .with_tooltip("Yasal — Command Palette")
             .build()?;
+
+        let show_id = show_item.id().clone();
+        let settings_id = settings_item.id().clone();
+        let exit_id = exit_item.id().clone();
+        let (action_sender, action_receiver) = mpsc::channel();
+        MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+            let action = if event.id == show_id {
+                Some(TrayAction::ToggleWindow)
+            } else if event.id == settings_id {
+                Some(TrayAction::OpenSettings)
+            } else if event.id == exit_id {
+                Some(TrayAction::Exit)
+            } else {
+                None
+            };
+
+            if let Some(action) = action {
+                let _ = action_sender.send(action);
+                win32::show_window_for_event(hwnd);
+                ctx.request_repaint();
+            }
+        }));
 
         Ok(Self {
             _tray_icon: tray_icon,
-            show_item,
-            settings_item,
-            exit_item,
+            _show_item: show_item,
+            _settings_item: settings_item,
+            _exit_item: exit_item,
+            action_receiver,
         })
     }
 
     pub fn poll_action(&self) -> Option<TrayAction> {
-        while let Ok(event) = MenuEvent::receiver().try_recv() {
-            if event.id == self.show_item.id() {
-                return Some(TrayAction::ToggleWindow);
-            } else if event.id == self.settings_item.id() {
-                return Some(TrayAction::OpenSettings);
-            } else if event.id == self.exit_item.id() {
-                return Some(TrayAction::Exit);
-            }
-        }
-        None
+        self.action_receiver.try_recv().ok()
     }
 }

@@ -1,12 +1,12 @@
 # 🌸 Yasal — UI/UX Design
 
-> Dokumen ini melengkapi `implementation_plan.md`. Fokusnya murni pada keputusan desain antarmuka dan interaksi, hasil dari sesi diskusi UI/UX.
+> Dokumen ini melengkapi `archive/implementation_plan.md`. Fokusnya murni pada keputusan desain antarmuka dan interaksi, hasil dari sesi diskusi UI/UX.
 
 ---
 
 ## 1. Prinsip Desain
 
-1. **Compact over comfortable** — target user adalah power-user yang buka palette berkali-kali sehari. Densitas tinggi dan konsistensi lebih penting daripada "napas" visual yang lega.
+1. **Comfortable without excess** — palette harus cepat dipindai oleh power-user, tetapi tetap memberi ruang visual yang cukup agar hasil dan kontrol terasa jelas.
 2. **Predictable over expressive** — tidak ada perubahan ukuran/reflow yang mengejutkan saat navigasi keyboard. Semua baris hasil punya tinggi yang sama.
 3. **Native, bukan web-app** — mengikuti konvensi Windows (accent color sistem, dialog native untuk konfirmasi destruktif) supaya terasa seperti bagian dari OS, bukan aplikasi Electron yang menempel.
 4. **Zero-cost visual** — setiap elemen visual (icon asli, preview) harus lazy-loaded dan tidak mengorbankan target RAM (< 25 MB idle) atau startup time (< 200 ms).
@@ -19,8 +19,10 @@
 
 | Properti | Nilai |
 |---|---|
-| Row height | **40px**, fixed di semua baris |
-| Icon size | **24×24px**, rounded square container (radius 4-6px) |
+| Row height | **44px**, fixed di semua baris |
+| Vertical row gap | **4px** |
+| Icon size | **24×24px**, rounded square container (radius 8px) |
+| Selection corner radius | **14px** |
 | Max visible items | 8 (virtualized list, hanya render yang visible) |
 | Selection highlight | Background tint aksen + garis aksen tipis di kiri (bukan resize font/icon) |
 | Info per baris | Icon kiri → title (14px) → subtitle kontekstual (path file / kategori, 12px, muncul jika perlu disambiguasi) → badge kategori kanan (12px, muted) |
@@ -44,7 +46,8 @@
 
 - Indikator mode aktif (`=`, `>`, `??`, `cb`, dst): **icon di sisi kiri search bar berubah** sesuai mode yang terdeteksi dari prefix yang diketik. Contoh: masuk mode kalkulator (`=`) → icon search berganti jadi icon kalkulator.
 - Placeholder text juga ikut berubah kontekstual per mode ("Ketik ekspresi matematika..." saat mode kalkulator).
-- Tidak ada perubahan warna border/background search bar — cukup icon + placeholder, supaya perubahan terasa halus tapi jelas tanpa mengganggu fokus baca.
+- Search field memakai permukaan yang sedikit terangkat dan bentuk kapsul; tidak ada garis pemisah antara header pencarian dan daftar hasil.
+- Tinggi search field **50px**, radius **25px** (kapsul), tanpa outline terpisah, dengan margin horizontal konten **16px**.
 - **Lifecycle & Reset Input:**
   - Setiap kali window dibuka kembali via `Alt+Space`, search bar **selalu dalam keadaan kosong/bersih (fresh input)**.
   - Jika search bar berisi teks, menekan `Esc` pertama kali akan membersihkan teks (kembali ke state awal/frecency). Menekan `Esc` saat search bar sudah kosong akan menutup window.
@@ -59,7 +62,7 @@
 | **No results** | Pesan sederhana **"Tidak ada hasil"**, tanpa saran fallback ke web search otomatis. |
 | **Loading** (mis. calculator ekspresi kompleks, network info fetch) | Indikator kecil di baris terkait, bukan blocking seluruh UI. |
 | **Konfirmasi aksi destruktif** (Shutdown/Restart/Sign Out) | **Native Windows dialog** terpisah, bukan modal overlay di dalam window Yasal. |
-| **Settings** | **View built-in di dalam palette** — diakses dengan mengetik `settings` atau via tray icon. Disajikan sebagai daftar baris interaktif (40px rows) yang dapat dicari/difilter dan diatur murni via keyboard. |
+| **Settings** | **View built-in di dalam palette** — diakses dengan mengetik `settings` atau via tray icon. Disajikan sebagai daftar baris interaktif (44px rows, jarak 4px) yang dapat dicari/difilter dan diatur murni via keyboard. |
 
 ---
 
@@ -67,7 +70,7 @@
 
 ### Mekanisme Action Panel (In-place Replacement / Raycast-style)
 Saat user menyorot sebuah item di hasil pencarian dan menekan tombol `Tab`:
-1. **Transisi In-place**: Result list utama seketika digantikan oleh daftar aksi kontekstual untuk item tersebut (menggunakan struktur baris 40px yang seragam).
+1. **Transisi In-place**: Result list utama seketika digantikan oleh daftar aksi kontekstual untuk item tersebut (menggunakan struktur baris 44px dengan jarak 4px yang seragam).
 2. **Breadcrumb Search Bar**: Placeholder/badge di search bar berubah menjadi format breadcrumb: `[Nama Item] > Ketik aksi...` (misal `Visual Studio Code > Ketik aksi...`).
 3. **Daftar Aksi Contoh (Aplikasi)**:
    - `🛡️ Jalankan sebagai Administrator` (`Ctrl+Enter`)
@@ -108,7 +111,7 @@ Status bar berada di baris paling bawah window sebagai panduan pintasan keyboard
 
 ## 7. View Settings Built-in
 
-Settings disajikan sebagai **interactive list items** (re-use layout baris 40px), sehingga tidak membutuhkan mouse atau form rendering terpisah:
+Settings disajikan sebagai **interactive list items** (re-use layout baris 44px dengan jarak 4px), sehingga tidak membutuhkan mouse atau form rendering terpisah:
 
 - **Searchable**: Search bar menyaring daftar pengaturan secara langsung (contoh: ketik `hotkey` langsung memfilter baris hotkey).
 - **Struktur Baris Pengaturan**:
@@ -137,22 +140,24 @@ Settings disajikan sebagai **interactive list items** (re-use layout baris 40px)
 
 | Properti | Nilai |
 |---|---|
-| Ukuran | 650 × 420px, dynamic height mengikuti jumlah baris hasil |
-| Posisi | **Selalu di monitor utama (primary display)**, center horizontal, sedikit di atas tengah vertikal |
-| Corner radius | 12px |
-| Shadow | DWM drop shadow native Windows |
-| Animasi | Fade in 100ms, fade out 50ms |
+| Ukuran | Kartu lebar **650px**, tinggi dinamis hingga **500px** untuk menampilkan maksimal 8 baris. Jendela OS 18px lebih besar di setiap sisi (margin transparan untuk bayangan) |
+| Margin konten | 16px horizontal, 8px vertikal |
+| Posisi | **Monitor tempat kursor mouse berada** (bukan selalu monitor utama), center horizontal, sedikit di atas tengah vertikal. Tepi atas dihitung dari tinggi maksimum kartu sehingga tidak bergeser saat jumlah hasil berubah. Skala DPI diambil dari monitor tujuan |
+| Corner radius | 26px (frame), 25px (search field), 14px (highlight), 8px (wadah ikon) |
+| Border frame | Stroke tipis 1px mengikuti accent color Windows |
+| Shadow | Bayangan lembut dilukis egui di margin transparan sekeliling kartu (bayangan DWM native tidak mengikuti sudut 26px). DWM rounding dan border sistem dimatikan |
+| Animasi | Fade in 100ms (easing keluar). Fade out 50ms belum diimplementasikan; jendela langsung disembunyikan |
 
 ---
 
 ## 10. Ringkasan Keputusan (Quick Reference)
 
-- [x] Layout hasil: flat uniform list, 40px row, 24px icon asli (lazy extraction + disk/memory cache)
+- [x] Layout hasil: flat uniform list, 44px row dengan jarak 4px, 24px icon asli (lazy extraction + disk/memory cache)
 - [x] Mode indicator: icon kiri search bar berubah per prefix
 - [x] Search bar lifecycle: fresh input on open, 2-step Esc (clear text → close window)
 - [x] Empty state: recent/frequently used (frecency-based)
 - [x] No-results: pesan polos, tanpa saran web otomatis
-- [x] Settings: built-in searchable list view (40px rows, keyboard-driven)
+- [x] Settings: built-in searchable list view (44px rows, 4px gap, keyboard-driven)
 - [x] Action Panel: in-place list replacement on `Tab`, breadcrumb di search bar
 - [x] Status Bar: contextual dynamic hints sesuai item & state
 - [x] Theme: sinkronisasi tema Windows + manual override (Auto/Dark/Light) + Accent Color DWM

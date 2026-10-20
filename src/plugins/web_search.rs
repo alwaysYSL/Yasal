@@ -1,4 +1,5 @@
 use crate::core::plugin::{ItemIcon, Plugin, QueryResult};
+use crate::platform::win32;
 use std::sync::Arc;
 
 pub struct WebSearchPlugin {
@@ -12,13 +13,23 @@ impl WebSearchPlugin {
         }
     }
 
+    fn has_uri_scheme(text: &str) -> bool {
+        text.split_once(':').is_some_and(|(scheme, _)| {
+            scheme.len() > 1
+                && scheme
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+        })
+    }
+
     fn is_url(text: &str) -> bool {
         let lower = text.to_lowercase();
-        lower.starts_with("http://")
-            || lower.starts_with("https://")
-            || lower.starts_with("www.")
-            || lower.starts_with("mailto:")
-            || (lower.contains('.') && !lower.contains(' ') && (lower.ends_with(".com") || lower.ends_with(".org") || lower.ends_with(".net") || lower.ends_with(".io") || lower.ends_with(".dev") || lower.ends_with(".id")))
+        !lower.contains(char::is_whitespace)
+            && (Self::has_uri_scheme(&lower)
+                || lower.starts_with("www.")
+                || lower == "localhost"
+                || lower.starts_with("localhost:")
+                || lower.contains('.'))
     }
 
     fn build_search_url(&self, query: &str) -> String {
@@ -89,7 +100,7 @@ impl Plugin for WebSearchPlugin {
         }
 
         if Self::is_url(query_text) {
-            let url = if query_text.starts_with("http://") || query_text.starts_with("https://") || query_text.starts_with("mailto:") {
+            let url = if Self::has_uri_scheme(query_text) {
                 query_text.to_string()
             } else {
                 format!("https://{}", query_text)
@@ -104,7 +115,12 @@ impl Plugin for WebSearchPlugin {
                 icon: ItemIcon::Symbolic("web"),
                 score: 800,
                 primary_action: Arc::new(move || {
-                    let _ = open::that_detached(&url_clone);
+                    if open::that_detached(&url_clone).is_err() {
+                        win32::show_error_dialog(
+                            "Tautan Tidak Dapat Dibuka",
+                            "Browser atau aplikasi tujuan tidak tersedia.",
+                        );
+                    }
                 }),
                 secondary_action: None,
                 additional_actions: Vec::new(),
@@ -123,7 +139,12 @@ impl Plugin for WebSearchPlugin {
             icon: ItemIcon::Symbolic("web"),
             score: if is_prefix { 900 } else { 10 }, // Low global fallback, high when prefixed
             primary_action: Arc::new(move || {
-                let _ = open::that_detached(&url_clone);
+                if open::that_detached(&url_clone).is_err() {
+                    win32::show_error_dialog(
+                        "Pencarian Tidak Dapat Dibuka",
+                        "Browser bawaan Windows tidak tersedia.",
+                    );
+                }
             }),
             secondary_action: None,
             additional_actions: Vec::new(),

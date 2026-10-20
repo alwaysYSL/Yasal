@@ -1,11 +1,17 @@
 use crate::core::matcher::Matcher;
 use crate::core::plugin::{ItemAction, ItemIcon, Plugin, QueryResult};
+use crate::platform::win32;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use windows::core::HSTRING;
 use windows::Win32::Foundation::HANDLE;
-use windows::Win32::UI::Shell::ShellExecuteW;
+use windows::Win32::System::Com::CoTaskMemFree;
+use windows::Win32::UI::Shell::{
+    BHID_EnumItems, FOLDERID_AppsFolder, IEnumShellItems, IShellItem, SHGetKnownFolderItem,
+    ShellExecuteW, KF_FLAG_DEFAULT, SIGDN, SIGDN_NORMALDISPLAY, SIGDN_PARENTRELATIVEPARSING,
+};
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
 #[derive(Clone, Debug)]
@@ -55,7 +61,8 @@ impl AppLauncherPlugin {
             scan_dirs.push(app_data.join(r"Microsoft\Windows\Start Menu\Programs"));
         }
         if let Ok(program_data) = std::env::var("ALLUSERSPROFILE") {
-            scan_dirs.push(PathBuf::from(program_data).join(r"Microsoft\Windows\Start Menu\Programs"));
+            scan_dirs
+                .push(PathBuf::from(program_data).join(r"Microsoft\Windows\Start Menu\Programs"));
         }
         if let Some(desktop) = dirs::desktop_dir() {
             scan_dirs.push(desktop);
@@ -67,9 +74,13 @@ impl AppLauncherPlugin {
             }
         }
 
-        // Deduplicate entries by name
-        entries.sort_by(|a, b| a.name.cmp(&b.name));
-        entries.dedup_by(|a, b| a.name.eq_ignore_ascii_case(&b.name));
+        // AppsFolder includes packaged UWP/MSIX apps as well as some Win32 apps.
+        // Scan it after shortcuts so name collisions retain the existing entry.
+        self.scan_apps_folder(&mut entries);
+
+        let mut seen_names = HashSet::new();
+        entries.retain(|entry| seen_names.insert(entry.name.to_lowercase()));
+        entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
         self.apps = entries;
     }
@@ -100,6 +111,71 @@ impl AppLauncherPlugin {
             }
         }
     }
+
+    fn scan_apps_folder(&self, out: &mut Vec<AppEntry>) {
+        unsafe {
+            let folder: IShellItem =
+                match SHGetKnownFolderItem(&FOLDERID_AppsFolder, KF_FLAG_DEFAULT, None) {
+                    Ok(folder) => folder,
+                    Err(_) => return,
+                };
+            let items: IEnumShellItems = match folder.BindToHandler(None, &BHID_EnumItems) {
+                Ok(items) => items,
+                Err(_) => return,
+            };
+
+            loop {
+                let mut batch = [None];
+                let mut fetched = 0;
+                if items.Next(&mut batch, Some(&mut fetched)).is_err() || fetched == 0 {
+                    break;
+                }
+
+                let Some(item) = batch[0].take() else {
+                    continue;
+                };
+                let Some(name) = shell_item_display_name(&item, SIGDN_NORMALDISPLAY) else {
+                    continue;
+                };
+                let Some(app_id) = shell_item_display_name(&item, SIGDN_PARENTRELATIVEPARSING)
+                else {
+                    continue;
+                };
+
+                if !name.is_empty() && !app_id.is_empty() {
+                    let launch_target = if is_shell_apps_folder_target(&app_id) {
+                        app_id
+                    } else {
+                        format!(r"shell:AppsFolder\{app_id}")
+                    };
+                    out.push(AppEntry {
+                        id: format!("app:{}", name.to_lowercase()),
+                        name,
+                        path: PathBuf::from(launch_target),
+                    });
+                }
+            }
+        }
+    }
+}
+
+unsafe fn shell_item_display_name(item: &IShellItem, format: SIGDN) -> Option<String> {
+    let value = item.GetDisplayName(format).ok()?;
+    let result = value.to_string().ok();
+    CoTaskMemFree(Some(value.0.cast()));
+    result
+}
+
+fn is_shell_apps_folder_target(target: &str) -> bool {
+    target
+        .get(..17)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(r"shell:AppsFolder\"))
+}
+
+fn shell_execute(operation: &str, target: &str) -> bool {
+    let operation = HSTRING::from(operation);
+    let target = HSTRING::from(target);
+    unsafe { ShellExecuteW(None, &operation, &target, None, None, SW_SHOWNORMAL).0 as isize > 32 }
 }
 
 impl Default for AppLauncherPlugin {
@@ -122,39 +198,83 @@ impl Plugin for AppLauncherPlugin {
     }
 
     fn query(&self, input: &str) -> Vec<QueryResult> {
-        let mut results = Vec::new();
+        let mut matches: Vec<(&AppEntry, u32)> = self
+            .apps
+            .iter()
+            .filter_map(|app| {
+                let score = if input.is_empty() {
+                    Some(10)
+                } else {
+                    self.matcher.fuzzy_score(input, &app.name)
+                };
+                score.map(|score| (app, score))
+            })
+            .collect();
+        matches.sort_unstable_by(|(_, left), (_, right)| right.cmp(left));
+        matches.truncate(8);
 
-        for app in &self.apps {
-            let score = if input.is_empty() {
-                Some(10)
-            } else {
-                self.matcher.fuzzy_score(input, &app.name)
-            };
+        let mut results = Vec::with_capacity(matches.len());
+        for (app, score) in matches {
+            let target = app.path.to_string_lossy().to_string();
+            let is_shell_app = is_shell_apps_folder_target(&target);
+            let path_for_launch = app.path.clone();
+            let target_for_launch = target.clone();
 
-            if let Some(score) = score {
-                let path_clone = app.path.clone();
-                let path_for_admin = app.path.clone();
-                let path_for_folder = app.path.clone();
-                let path_for_copy = app.path.clone();
+            let primary_action: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+                let opened = if is_shell_app {
+                    shell_execute("open", &target_for_launch)
+                } else {
+                    open::that_detached(&path_for_launch).is_ok()
+                };
+                if !opened {
+                    win32::show_error_dialog(
+                        "Aplikasi Tidak Dapat Dibuka",
+                        "Target aplikasi tidak tersedia atau shortcut sudah tidak valid.",
+                    );
+                }
+            });
 
-                let primary_action: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
-                    let _ = open::that_detached(&path_clone);
-                });
-
-                let secondary_action = ItemAction {
-                    label: "Run as Administrator".to_string(),
-                    icon: "🛡️",
-                    shortcut_hint: Some("Ctrl+Enter".to_string()),
-                    action: Arc::new(move || {
-                        let path_str = path_for_admin.to_string_lossy();
-                        let file_w = HSTRING::from(path_str.as_ref());
-                        let op_w = HSTRING::from("runas");
-                        unsafe {
-                            let _ = ShellExecuteW(None, &op_w, &file_w, None, None, SW_SHOWNORMAL);
+            let (secondary_action, additional_actions) = if is_shell_app {
+                let target_for_copy = target.clone();
+                let apps_folder_action = ItemAction {
+                    label: "Buka daftar aplikasi Windows".to_string(),
+                    icon: "📁",
+                    shortcut_hint: None,
+                    action: Arc::new(|| {
+                        if !shell_execute("open", "shell:AppsFolder") {
+                            win32::show_error_dialog(
+                                "AppsFolder Tidak Dapat Dibuka",
+                                "Windows tidak dapat membuka daftar aplikasi.",
+                            );
                         }
                     }),
                 };
-
+                let copy_id_action = ItemAction {
+                    label: "Salin ID aplikasi".to_string(),
+                    icon: "📋",
+                    shortcut_hint: None,
+                    action: Arc::new(move || {
+                        let _ = set_clipboard_text(&target_for_copy);
+                    }),
+                };
+                (None, vec![apps_folder_action, copy_id_action])
+            } else {
+                let path_for_admin = app.path.clone();
+                let path_for_folder = app.path.clone();
+                let path_for_copy = app.path.clone();
+                let admin_action = ItemAction {
+                    label: "Jalankan sebagai administrator".to_string(),
+                    icon: "🛡️",
+                    shortcut_hint: Some("Ctrl+Enter".to_string()),
+                    action: Arc::new(move || {
+                        if !shell_execute("runas", &path_for_admin.to_string_lossy()) {
+                            win32::show_error_dialog(
+                                "Aplikasi Tidak Dapat Dijalankan",
+                                "Windows menolak atau gagal menjalankan aplikasi sebagai administrator.",
+                            );
+                        }
+                    }),
+                };
                 let folder_action = ItemAction {
                     label: "Buka Lokasi Folder".to_string(),
                     icon: "📁",
@@ -165,7 +285,6 @@ impl Plugin for AppLauncherPlugin {
                         }
                     }),
                 };
-
                 let copy_path_action = ItemAction {
                     label: "Salin Path File".to_string(),
                     icon: "📋",
@@ -175,19 +294,23 @@ impl Plugin for AppLauncherPlugin {
                         let _ = set_clipboard_text(&path_str);
                     }),
                 };
+                (
+                    Some(admin_action.clone()),
+                    vec![admin_action, folder_action, copy_path_action],
+                )
+            };
 
-                results.push(QueryResult {
-                    id: app.id.clone(),
-                    title: app.name.clone(),
-                    subtitle: Some(app.path.to_string_lossy().to_string()),
-                    category: "Aplikasi".to_string(),
-                    icon: ItemIcon::App(app.path.to_string_lossy().to_string()),
-                    score,
-                    primary_action,
-                    secondary_action: Some(secondary_action.clone()),
-                    additional_actions: vec![secondary_action, folder_action, copy_path_action],
-                });
-            }
+            results.push(QueryResult {
+                id: app.id.clone(),
+                title: app.name.clone(),
+                subtitle: Some(target.clone()),
+                category: "Aplikasi".to_string(),
+                icon: ItemIcon::App(target),
+                score,
+                primary_action,
+                secondary_action,
+                additional_actions,
+            });
         }
 
         results
@@ -210,7 +333,11 @@ pub fn set_clipboard_text(text: &str) -> Result<(), Box<dyn std::error::Error>> 
             if let Ok(handle) = handle {
                 let ptr = GlobalLock(handle);
                 if !ptr.is_null() {
-                    std::ptr::copy_nonoverlapping(utf16.as_ptr() as *const u8, ptr as *mut u8, bytes);
+                    std::ptr::copy_nonoverlapping(
+                        utf16.as_ptr() as *const u8,
+                        ptr as *mut u8,
+                        bytes,
+                    );
                     let _ = GlobalUnlock(handle);
                     let _ = SetClipboardData(13, HANDLE(handle.0)); // 13 = CF_UNICODETEXT
                 }
@@ -219,4 +346,30 @@ pub fn set_clipboard_text(text: &str) -> Result<(), Box<dyn std::error::Error>> 
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_apps_folder_entries_use_shell_actions() {
+        let target = r"shell:AppsFolder\Contoso.App_123!App";
+        let launcher =
+            AppLauncherPlugin::new_with_mock(vec![("Contoso App".to_string(), target.to_string())]);
+
+        let result = launcher.query("contoso").remove(0);
+
+        assert_eq!(result.subtitle.as_deref(), Some(target));
+        assert!(result.secondary_action.is_none());
+        assert_eq!(result.additional_actions.len(), 2);
+    }
+
+    #[test]
+    fn shell_apps_folder_target_detection_is_case_insensitive() {
+        assert!(is_shell_apps_folder_target(
+            r"SHELL:APPSFOLDER\Contoso.App_123!App"
+        ));
+        assert!(!is_shell_apps_folder_target(r"C:\Apps\Contoso.exe"));
+    }
 }

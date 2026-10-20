@@ -1,5 +1,6 @@
-pub mod search_bar;
-pub mod result_list;
 pub mod action_panel;
-pub mod status_bar;
+pub mod icons;
+pub mod result_list;
+pub mod search_bar;
 pub mod settings_view;
+pub mod status_bar;

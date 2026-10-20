@@ -30,5 +30,9 @@ fn test_dispatcher_mode_detection() {
     assert_eq!(dispatcher.detect_mode_icon("> ipconfig"), "shell");
     assert_eq!(dispatcher.detect_mode_icon("?? rustlang"), "web");
     assert_eq!(dispatcher.detect_mode_icon("settings"), "settings");
+    assert_eq!(dispatcher.detect_mode_icon("$ bluetooth"), "settings");
+    assert_eq!(dispatcher.detect_mode_icon("file laporan"), "file");
+    assert_eq!(dispatcher.detect_mode_icon("cb invoice"), "clipboard");
+    assert_eq!(dispatcher.detect_mode_icon("network"), "network");
     assert_eq!(dispatcher.detect_mode_icon("visual studio"), "search");
 }

@@ -1,29 +1,26 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use eframe::egui;
 use raw_window_handle::HasWindowHandle;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::sync::Arc;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 use yasal::app::YasalApp;
 use yasal::config::AppConfig;
 use yasal::core::dispatcher::Dispatcher;
+use yasal::logging::log as log_msg;
 use yasal::platform::hotkey::HotkeyManager;
 use yasal::platform::tray::TrayManager;
 use yasal::plugins::app_launcher::AppLauncherPlugin;
 use yasal::plugins::calculator::CalculatorPlugin;
+use yasal::plugins::clipboard_history::ClipboardHistoryPlugin;
+use yasal::plugins::file_search::FileSearchPlugin;
+use yasal::plugins::network_info::NetworkInfoPlugin;
 use yasal::plugins::shell_command::ShellCommandPlugin;
 use yasal::plugins::system_commands::SystemCommandsPlugin;
 use yasal::plugins::web_search::WebSearchPlugin;
-
-fn log_msg(msg: &str) {
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("yasal_debug.log")
-    {
-        let _ = writeln!(file, "[{}] {}", chrono::Local::now().format("%H:%M:%S%.3f"), msg);
-    }
-}
+use yasal::plugins::win_settings::WinSettingsPlugin;
+use yasal::plugins::window_switcher::WindowSwitcherPlugin;
+use yasal::theme::{MAX_WINDOW_HEIGHT, WINDOW_WIDTH};
 
 fn main() {
     log_msg("=== Yasal Starting ===");
@@ -59,16 +56,45 @@ fn main() {
         dispatcher.register(Arc::new(SystemCommandsPlugin::new()));
     }
 
+    if config.enable_file_search {
+        dispatcher.register(Arc::new(FileSearchPlugin::new()));
+    }
+
+    if config.enable_windows_settings {
+        dispatcher.register(Arc::new(WinSettingsPlugin::new()));
+    }
+
+    if config.enable_clipboard_history {
+        match ClipboardHistoryPlugin::initialize() {
+            Ok(plugin) => dispatcher.register(Arc::new(plugin)),
+            Err(error) => log_msg(&format!("Clipboard history initialization failed: {error}")),
+        }
+    }
+
+    if config.enable_window_switcher {
+        dispatcher.register(Arc::new(WindowSwitcherPlugin::new()));
+    }
+
+    if config.enable_network_info {
+        dispatcher.register(Arc::new(NetworkInfoPlugin::new()));
+    }
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("🌸 Yasal")
-            .with_inner_size([650.0, 420.0])
-            .with_min_inner_size([650.0, 100.0])
-            .with_max_inner_size([650.0, 420.0])
+            .with_title("ðŸŒ¸ Yasal")
+            .with_inner_size([WINDOW_WIDTH, 420.0])
+            .with_min_inner_size([WINDOW_WIDTH, 100.0])
+            .with_max_inner_size([WINDOW_WIDTH, MAX_WINDOW_HEIGHT])
             .with_resizable(false)
             .with_decorations(false)
+            .with_transparent(true)
             .with_always_on_top()
             .with_active(true),
+
+        // CPU Optimization: Set max FPS to reduce continuous rendering
+        // This doesn't fully work in older egui versions, but helps
+        vsync: true,
+
         ..Default::default()
     };
 
@@ -84,22 +110,48 @@ fn main() {
             #[cfg(target_os = "windows")]
             {
                 if let Ok(handle) = cc.window_handle() {
-                    let _ = window_vibrancy::apply_acrylic(&handle, Some((20, 20, 20, 200)));
-                    if let raw_window_handle::RawWindowHandle::Win32(win32_handle) = handle.as_raw() {
+                    if let raw_window_handle::RawWindowHandle::Win32(win32_handle) = handle.as_raw()
+                    {
                         window_hwnd = win32_handle.hwnd.get();
                         HotkeyManager::set_window_hwnd(window_hwnd);
+                        yasal::platform::win32::apply_rounded_corners(window_hwnd);
                         log_msg(&format!("Window HWND acquired: 0x{:X}", window_hwnd));
                     }
                 }
             }
 
-            let hotkey = HotkeyManager::new(cc.egui_ctx.clone()).ok();
-            let tray = TrayManager::new().ok();
+            let (hotkey, mut startup_notice) =
+                match HotkeyManager::new(cc.egui_ctx.clone(), &config.hotkey) {
+                    Ok(manager) => {
+                        let warning = manager.warning().map(str::to_owned);
+                        (Some(manager), warning)
+                    }
+                    Err(error) => {
+                        let message = format!("Pintasan global tidak aktif: {error}");
+                        log_msg(&message);
+                        (None, Some(message))
+                    }
+                };
+            let tray = match TrayManager::new(cc.egui_ctx.clone(), window_hwnd) {
+                Ok(manager) => Some(manager),
+                Err(error) => {
+                    let message = format!("Tray sistem tidak dapat dibuat: {error}");
+                    log_msg(&message);
+                    startup_notice = Some(message);
+                    None
+                }
+            };
 
             log_msg("YasalApp created successfully");
 
             Ok(Box::new(YasalApp::new(
-                cc, config, dispatcher, hotkey, tray, window_hwnd,
+                cc,
+                config,
+                dispatcher,
+                hotkey,
+                tray,
+                window_hwnd,
+                startup_notice,
             )))
         }),
     ) {

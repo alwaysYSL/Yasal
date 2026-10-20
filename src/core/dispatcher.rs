@@ -19,6 +19,10 @@ impl Dispatcher {
         self.plugins.push(plugin);
     }
 
+    pub fn remove(&mut self, plugin_id: &str) {
+        self.plugins.retain(|plugin| plugin.id() != plugin_id);
+    }
+
     /// Returns the symbolic icon or mode name for the active query prefix.
     pub fn detect_mode_icon(&self, query: &str) -> &'static str {
         let trimmed = query.trim_start();
@@ -28,7 +32,15 @@ impl Dispatcher {
             return "shell";
         } else if trimmed.starts_with("??") {
             return "web";
-        } else if trimmed.eq_ignore_ascii_case("settings") {
+        } else if trimmed.starts_with("file ") || trimmed.eq_ignore_ascii_case("file") {
+            return "file";
+        } else if trimmed.starts_with("cb ") || trimmed.eq_ignore_ascii_case("cb") {
+            return "clipboard";
+        } else if trimmed.eq_ignore_ascii_case("ip") || trimmed.eq_ignore_ascii_case("network") {
+            return "network";
+        } else if trimmed.eq_ignore_ascii_case("w") || trimmed.starts_with("w ") {
+            return "window";
+        } else if trimmed.starts_with('$') || trimmed.eq_ignore_ascii_case("settings") {
             return "settings";
         }
         "search"
@@ -45,9 +57,13 @@ impl Dispatcher {
         // 1. Prefix-based routing
         for plugin in &self.plugins {
             if let Some(prefix) = plugin.prefix() {
-                if trimmed.starts_with(prefix) {
-                    let sub_query = trimmed[prefix.len()..].trim();
-                    return plugin.query(sub_query);
+                let textual_prefix = prefix.chars().all(char::is_alphanumeric);
+                let remainder = trimmed.strip_prefix(prefix);
+                let matches = remainder.is_some_and(|rest| {
+                    !textual_prefix || rest.is_empty() || rest.starts_with(char::is_whitespace)
+                });
+                if matches {
+                    return plugin.query(remainder.unwrap_or_default().trim());
                 }
             }
         }
@@ -63,6 +79,22 @@ impl Dispatcher {
                     res.score = ((res.score as f64) * mult) as u32;
                 }
                 results.extend(plugin_results);
+            }
+        }
+
+        // A file lookup is useful only after the ordinary global plugins have
+        // no local match. This keeps filesystem indexing lazy during startup
+        // and while common app or command searches are being typed.
+        if trimmed.chars().count() >= 3
+            && results.iter().all(|result| result.category == "Web")
+            && !trimmed.contains("://")
+        {
+            if let Some(file_search) = self
+                .plugins
+                .iter()
+                .find(|plugin| plugin.id() == "file_search")
+            {
+                results.extend(file_search.query(trimmed));
             }
         }
 

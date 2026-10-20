@@ -1,4 +1,5 @@
 use crate::core::plugin::{ItemIcon, Plugin, QueryResult};
+use crate::platform::win32;
 use std::process::Command;
 use std::sync::Arc;
 
@@ -49,9 +50,16 @@ impl Plugin for ShellCommandPlugin {
             icon: ItemIcon::Symbolic("shell"),
             score: 1000,
             primary_action: Arc::new(move || {
-                let _ = Command::new("powershell")
+                if Command::new("powershell")
                     .args(["-NoExit", "-Command", &cmd_clone])
-                    .spawn();
+                    .spawn()
+                    .is_err()
+                {
+                    win32::show_error_dialog(
+                        "PowerShell Tidak Dapat Dibuka",
+                        "Windows tidak dapat menjalankan perintah di PowerShell.",
+                    );
+                }
             }),
             secondary_action: None,
             additional_actions: Vec::new(),

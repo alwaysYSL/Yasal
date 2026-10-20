@@ -1,6 +1,11 @@
-pub mod icon_cache;
 pub mod app_launcher;
 pub mod calculator;
-pub mod web_search;
+pub mod clipboard_history;
+pub mod file_search;
+pub mod icon_cache;
+pub mod network_info;
 pub mod shell_command;
 pub mod system_commands;
+pub mod web_search;
+pub mod win_settings;
+pub mod window_switcher;

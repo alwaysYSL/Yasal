@@ -75,7 +75,14 @@ impl Plugin for SystemCommandsPlugin {
                         "Konfirmasi Restart",
                         "Apakah Anda yakin ingin me-restart komputer?",
                     ) {
-                        win32::restart_system();
+                        if let Err(error) = win32::restart_system_result() {
+                            win32::show_error_dialog(
+                                "Restart Gagal",
+                                &format!(
+                                    "Windows tidak dapat me-restart komputer.\n\nDetail: {error}\n\nPastikan akun Anda memiliki izin untuk me-restart Windows, lalu coba lagi.",
+                                ),
+                            );
+                        }
                     }
                 }) as Arc<dyn Fn() + Send + Sync>,
             ),
@@ -89,7 +96,14 @@ impl Plugin for SystemCommandsPlugin {
                         "Konfirmasi Shutdown",
                         "Apakah Anda yakin ingin mematikan komputer?",
                     ) {
-                        win32::shutdown_system();
+                        if let Err(error) = win32::shutdown_system_result() {
+                            win32::show_error_dialog(
+                                "Shutdown Gagal",
+                                &format!(
+                                    "Windows tidak dapat mematikan komputer.\n\nDetail: {error}\n\nPastikan akun Anda memiliki izin untuk mematikan Windows, lalu coba lagi.",
+                                ),
+                            );
+                        }
                     }
                 }) as Arc<dyn Fn() + Send + Sync>,
             ),
@@ -103,7 +117,14 @@ impl Plugin for SystemCommandsPlugin {
                         "Konfirmasi Sign Out",
                         "Apakah Anda yakin ingin keluar dari akun?",
                     ) {
-                        win32::sign_out_system();
+                        if let Err(error) = win32::sign_out_system_result() {
+                            win32::show_error_dialog(
+                                "Sign Out Gagal",
+                                &format!(
+                                    "Windows tidak dapat mengeluarkan akun saat ini.\n\nDetail: {error}\n\nTutup aplikasi yang memblokir proses keluar, lalu coba lagi.",
+                                ),
+                            );
+                        }
                     }
                 }) as Arc<dyn Fn() + Send + Sync>,
             ),

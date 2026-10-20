@@ -1,7 +1,9 @@
-pub mod platform;
-pub mod core;
-pub mod plugins;
-pub mod ui;
-pub mod config;
-pub mod theme;
 pub mod app;
+pub mod config;
+pub mod core;
+pub mod fonts;
+pub mod logging;
+pub mod platform;
+pub mod plugins;
+pub mod theme;
+pub mod ui;
