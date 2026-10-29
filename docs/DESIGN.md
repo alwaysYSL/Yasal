@@ -1,6 +1,6 @@
 # 🌸 Yasal — UI/UX Design
 
-> Dokumen ini melengkapi `archive/implementation_plan.md`. Fokusnya murni pada keputusan desain antarmuka dan interaksi, hasil dari sesi diskusi UI/UX.
+> Dokumen ini mencatat perilaku UI/UX yang tersedia saat ini. Rencana historis tersimpan di [`archive/implementation_plan.md`](archive/implementation_plan.md); status dan batas implementasi diverifikasi terhadap source.
 
 ---
 
@@ -9,7 +9,7 @@
 1. **Comfortable without excess** — palette harus cepat dipindai oleh power-user, tetapi tetap memberi ruang visual yang cukup agar hasil dan kontrol terasa jelas.
 2. **Predictable over expressive** — tidak ada perubahan ukuran/reflow yang mengejutkan saat navigasi keyboard. Semua baris hasil punya tinggi yang sama.
 3. **Native, bukan web-app** — mengikuti konvensi Windows (accent color sistem, dialog native untuk konfirmasi destruktif) supaya terasa seperti bagian dari OS, bukan aplikasi Electron yang menempel.
-4. **Zero-cost visual** — setiap elemen visual (icon asli, preview) harus lazy-loaded dan tidak mengorbankan target RAM (< 25 MB idle) atau startup time (< 200 ms).
+4. **Biaya visual terukur** — ikon diekstrak di background dan menggunakan cache disk. Target memori/startup belum dipublikasikan sebagai jaminan; ukur build release pada perangkat representatif sebelum menetapkan angka.
 
 ---
 
@@ -17,28 +17,25 @@
 
 **Pola: Flat uniform list** (bukan top-match emphasis, bukan list+preview panel).
 
-| Properti | Nilai |
+| Properti | Nilai implementasi |
 |---|---|
 | Row height | **44px**, fixed di semua baris |
 | Vertical row gap | **4px** |
-| Icon size | **24×24px**, rounded square container (radius 8px) |
+| Icon area | 28×28px; ikon shell PNG 64×64 ditampilkan pada area ini |
 | Selection corner radius | **14px** |
-| Max visible items | 8 (virtualized list, hanya render yang visible) |
-| Selection highlight | Background tint aksen + garis aksen tipis di kiri (bukan resize font/icon) |
-| Info per baris | Icon kiri → title (14px) → subtitle kontekstual (path file / kategori, 12px, muncul jika perlu disambiguasi) → badge kategori kanan (12px, muted) |
+| Hasil terlihat | Maksimal 8 baris sebelum scroll. Dispatcher membatasi pencarian global hingga 8; pencarian ber-prefix tertentu bisa menghasilkan lebih banyak (misalnya pengalih jendela hingga 20). |
+| Selection highlight | Background tint aksen pada seluruh baris; tanpa garis aksen di kiri |
+| Info per baris | Ikon kiri → title (14px) → subtitle bila tersedia (11px) → badge kategori ber-outline (11px) |
 
-**Alasan menolak alternatif:**
-- *Top-match emphasis* (Spotlight-style) memakan ruang vertikal berharga dari budget 8-slot, dan bikin tinggi baris tidak konsisten → menyulitkan virtualisasi list.
-- *List + preview panel* (Alfred-style) butuh window lebih lebar dari 650px, bertentangan dengan filosofi ultra-ringan.
+**Alasan menolak alternatif:** top-match emphasis memberi bobot visual berbeda pada salah satu dari delapan slot; preview panel memerlukan window lebih lebar dari 650px. Desain saat ini menjaga baris seragam sesuai batas layout.
 
 ### Icon
 
-- **Icon asli aplikasi**, bukan generik, via `SHGetImageList` dengan `SHIL_JUMBO` (256×256, di-downscale ke 24px untuk ketajaman di layar HiDPI/scaling 150-200%).
-- **Lazy extraction**: saat indexing awal hanya simpan path. Icon diekstrak hanya untuk item yang tampil di hasil (8-10 item visible), dijalankan di thread terpisah (non-blocking).
-- **Disk cache**: `%LOCALAPPDATA%\Yasal\IconCache\`, key = hash(`path + last_modified_time`) agar otomatis invalidate saat aplikasi ter-update.
-- **Placeholder state**: kotak rounded abu-abu netral tampil dulu, icon di-swap masuk begitu ekstraksi/cache-read selesai.
-- **File individual** (hasil dari Everything): icon tipe file dari shell (`SHGetFileInfo`), di-cache in-memory (jumlah jenis terbatas, sering dipakai ulang).
-- **Item non-file** (Web Search, Calculator, System Commands, Network Info): icon simbolik/generik dalam container seragam yang sama dengan icon asli, supaya tetap "duduk" rapi berdampingan.
+- **Ikon shell asli**: diekstrak lewat `SHGetFileInfo` sebagai PNG 64×64 dan ditampilkan pada area 28×28px; bukan melalui `SHGetImageList`/`SHIL_JUMBO`.
+- **Ekstraksi lazy**: path disimpan pada hasil aplikasi/file; ikon diekstrak di thread terpisah saat hasil dirender.
+- **Cache**: PNG berada di `%LOCALAPPDATA%\Yasal\IconCache\`; key meng-hash path dan waktu modifikasi bila tersedia. Maksimal 64 tekstur ditahan di cache memori.
+- **Placeholder**: tile netral tampil selama ikon dimuat atau jika ekstraksi gagal.
+- **Item non-file** (web, kalkulator, perintah sistem, jaringan, dan lainnya): ikon simbolik.
 
 ---
 
@@ -48,21 +45,19 @@
 - Placeholder text juga ikut berubah kontekstual per mode ("Ketik ekspresi matematika..." saat mode kalkulator).
 - Search field memakai permukaan yang sedikit terangkat dan bentuk kapsul; tidak ada garis pemisah antara header pencarian dan daftar hasil.
 - Tinggi search field **50px**, radius **25px** (kapsul), tanpa outline terpisah, dengan margin horizontal konten **16px**.
-- **Lifecycle & Reset Input:**
-  - Setiap kali window dibuka kembali via `Alt+Space`, search bar **selalu dalam keadaan kosong/bersih (fresh input)**.
-  - Jika search bar berisi teks, menekan `Esc` pertama kali akan membersihkan teks (kembali ke state awal/frecency). Menekan `Esc` saat search bar sudah kosong akan menutup window.
-
+  - Setiap kali palette dibuka kembali melalui `Alt+Space`, query pencarian dibersihkan sebelum input baru.
+  - Di mode pencarian, `Esc` membersihkan query bila berisi teks, lalu menutup palette bila query sudah kosong. Di Settings, `Esc` kembali ke pencarian.
 ---
 
 ## 4. State-State UI
 
 | State | Perilaku |
 |---|---|
-| **Empty** (window baru dibuka, belum ada ketikan) | Tampilkan **4-5 recent/frequently used apps**, memanfaatkan algoritma frecency yang sudah direncanakan untuk ranking — tanpa biaya komputasi tambahan. |
-| **No results** | Pesan sederhana **"Tidak ada hasil"**, tanpa saran fallback ke web search otomatis. |
-| **Loading** (mis. calculator ekspresi kompleks, network info fetch) | Indikator kecil di baris terkait, bukan blocking seluruh UI. |
-| **Konfirmasi aksi destruktif** (Shutdown/Restart/Sign Out) | **Native Windows dialog** terpisah, bukan modal overlay di dalam window Yasal. |
-| **Settings** | **View built-in di dalam palette** — diakses dengan mengetik `settings` atau via tray icon. Disajikan sebagai daftar baris interaktif (44px rows, jarak 4px) yang dapat dicari/difilter dan diatur murni via keyboard. |
+| **Empty** (palette baru dibuka) | Hingga 5 item yang paling sering digunakan; sebelum ada riwayat, tampilkan hingga 5 aplikasi pertama pada indeks aplikasi. |
+| **No results** | Pesan **“Tidak ada hasil”** bila tidak ada hasil yang bisa ditampilkan. Pencarian web tetap menjadi fallback berperingkat rendah untuk query global yang tidak menghasilkan item non-Web. |
+| **Loading** | Baris status saat pencarian file atau informasi jaringan masih diproses di background. Kalkulator dievaluasi langsung. |
+| **Konfirmasi aksi destruktif** | **Native Windows dialog** untuk shutdown/restart/sign out dan aksi yang memerlukannya. |
+| **Settings** | View built-in, dibuka dengan `settings` atau dari system tray; judul/ID pengaturan dapat difilter dan baris dioperasikan dengan keyboard atau klik. |
 
 ---
 
@@ -72,25 +67,25 @@
 Saat user menyorot sebuah item di hasil pencarian dan menekan tombol `Tab`:
 1. **Transisi In-place**: Result list utama seketika digantikan oleh daftar aksi kontekstual untuk item tersebut (menggunakan struktur baris 44px dengan jarak 4px yang seragam).
 2. **Breadcrumb Search Bar**: Placeholder/badge di search bar berubah menjadi format breadcrumb: `[Nama Item] > Ketik aksi...` (misal `Visual Studio Code > Ketik aksi...`).
-3. **Daftar Aksi Contoh (Aplikasi)**:
-   - `🛡️ Jalankan sebagai Administrator` (`Ctrl+Enter`)
-   - `📁 Buka Lokasi File di Explorer`
-   - `📋 Salin Path File`
-   - `📌 Pin ke Taskbar / Start Menu`
+3. **Aksi kontekstual** bergantung pada item:
+   - Shortcut aplikasi: jalankan sebagai Administrator, buka folder lokasi, atau salin path.
+   - Aplikasi AppsFolder: buka daftar aplikasi Windows atau salin ID aplikasi.
+   - File: tampilkan di Explorer. Jendela: tutup jendela.
 4. **Navigasi**:
-   - `↑` / `↓`: Memilih aksi
-   - `Enter`: Eksekusi aksi terpilih
-   - `Esc` atau `Backspace` (saat query aksi kosong): Kembali seketika ke daftar hasil pencarian utama.
+   - `↑` / `↓`: memilih aksi.
+   - `Enter`: menjalankan aksi terpilih.
+   - `Esc`: kembali ke hasil utama.
+   - `Backspace`: kembali hanya bila query aksi kosong.
 
 ### Tabel Interaksi Keyboard
 
 | Key | Kondisi / Aksi |
 |---|---|
-| `↑` / `↓` | Navigasi antar baris item / aksi / setting |
-| `Enter` | Eksekusi aksi utama item terpilih (atau ubah/toggle nilai di view Settings) |
-| `Ctrl+Enter` | **Aksi sekunder default** per kategori:<br>• **App**: Run as Administrator<br>• **File**: Buka folder lokasi file di Explorer<br>• **Calculator / Network Info**: Salin hasil ke clipboard |
-| `Tab` | Buka **Action Panel** (in-place replacement) untuk item terpilih |
-| `Esc` | • **Jika di Action Panel**: Kembali ke hasil pencarian<br>• **Jika ada teks di Search Bar**: Bersihkan teks input<br>• **Jika Search Bar kosong**: Tutup window |
+| `↑` / `↓` | Navigasi baris hasil, aksi, atau pengaturan |
+| `Enter` | Eksekusi aksi utama; pada Settings mengubah pengaturan |
+| `Ctrl+Enter` | Aksi sekunder bila tersedia: menjalankan shortcut aplikasi sebagai Administrator, menampilkan file di Explorer, atau menyalin hasil. AppsFolder tanpa aksi sekunder memakai aksi utama. |
+| `Tab` | Buka Action Panel hanya bila item terpilih memiliki aksi tambahan |
+| `Esc` | Action Panel: kembali · Settings: kembali ke pencarian · Pencarian: bersihkan teks atau tutup jika kosong |
 
 ---
 
@@ -100,39 +95,38 @@ Status bar berada di baris paling bawah window sebagai panduan pintasan keyboard
 
 | State / Item yang Disorot | Petunjuk Status Bar |
 |---|---|
-| **Aplikasi (App)** | `↑↓ Navigasi · ⏎ Buka · Ctrl+⏎ Run as Admin · ⇥ Aksi · Esc Tutup` |
-| **File / Dokumen** | `↑↓ Navigasi · ⏎ Buka · Ctrl+⏎ Buka Folder · ⇥ Aksi · Esc Tutup` |
-| **Kalkulator** | `↑↓ Navigasi · ⏎ Salin Hasil · Esc Tutup` |
-| **Web Search** | `↑↓ Navigasi · ⏎ Buka di Browser · Esc Tutup` |
-| **Di dalam Action Panel (`Tab`)** | `↑↓ Pilih Aksi · ⏎ Jalankan · Esc Kembali` |
-| **Di dalam View Settings** | `↑↓ Pilih · ⏎ Ubah / Toggle · Esc Kembali` |
+| **Aplikasi** | `↑↓ Navigasi · ⏎ Buka · ⇥ Aksi · Esc Tutup` |
+| **File / Folder** | `↑↓ Navigasi · ⏎ Buka · Ctrl+⏎ Explorer · Esc Tutup` |
+| **Kalkulator / Clipboard / Jaringan** | `↑↓ Navigasi · ⏎ Salin · Esc Tutup` |
+| **Web / Pengaturan Windows** | `↑↓ Navigasi · ⏎ Buka · Esc Tutup` |
+| **Pengalih jendela** | `↑↓ Navigasi · ⏎ Beralih · ⇥ Aksi · Esc Tutup` |
+| **Perintah Shell / Sistem** | `↑↓ Navigasi · ⏎ Jalankan · Esc Tutup` |
+| **Action Panel** | `↑↓ Pilih aksi · ⏎ Jalankan · Esc Kembali` |
+| **Settings** | `↑↓ Pilih · ⏎ Ubah · Esc Kembali` |
 
 ---
 
 ## 7. View Settings Built-in
 
-Settings disajikan sebagai **interactive list items** (re-use layout baris 44px dengan jarak 4px), sehingga tidak membutuhkan mouse atau form rendering terpisah:
+Settings dibuka dengan `settings` atau menu system tray. Search bar menyaring judul dan ID pengaturan; baris setinggi 44px dengan jarak 4px dapat dipilih memakai panah, diaktifkan memakai `Enter`, atau diklik.
 
-- **Searchable**: Search bar menyaring daftar pengaturan secara langsung (contoh: ketik `hotkey` langsung memfilter baris hotkey).
-- **Struktur Baris Pengaturan**:
-  - `⌨️ Global Hotkey` — Nilai: `Alt + Space` *(Tekan Enter untuk merekam hotkey baru)*
-  - `🚀 Jalankan saat Windows Startup` — Nilai: `[ON / OFF]` *(Tekan Enter/Spasi untuk toggle)*
-  - `🎨 Tema Tampilan` — Nilai: `[Auto (Sistem) | Gelap | Terang]` *(Tekan Enter untuk rotasi pilihan)*
-  - `🔌 Plugin: Everything File Search` — Nilai: `[ON / OFF]`
-  - `🔌 Plugin: Kalkulator` — Nilai: `[ON / OFF]`
-  - `🔌 Plugin: Clipboard History` — Nilai: `[ON / OFF]`
-  - `🌐 Search Engine Default` — Nilai: `[Google | DuckDuckGo | Bing]`
-  - `ℹ️ Tentang Yasal` — Nilai: `v0.1.0 · Ringan & Cepat`
+- `⌨️ Pintasan Global`: `Enter` berputar melalui enam preset (`Alt+Space`, `Ctrl+Space`, `Ctrl+Shift+Space`, `Ctrl+Alt+Space`, `Alt+Shift+Space`, `Ctrl+Shift+Y`); ini bukan mode merekam tombol. Saat preset diganti, jika kombinasi yang dipilih sibuk Yasal mencoba preset berikutnya.
+- `🚀 Mulai bersama Windows`: tambah/hapus nilai `Yasal` pada key registry pengguna `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; nilainya menunjuk ke executable saat ini.
+- `🎨 Tema Tampilan`: rotasi `Otomatis (Sistem)` → `Gelap` → `Terang`.
+- Toggle plugin: Kalkulator, Pencarian Web, Perintah Shell, Perintah Sistem, Pencarian File, Pengaturan Windows, Riwayat Clipboard, Informasi Jaringan, dan Pengalih Jendela. Perubahan diterapkan tanpa memulai ulang.
+- `🌐 Mesin Pencari Bawaan`: rotasi Google, DuckDuckGo, dan Bing.
+- `📁 Folder Pencarian File`: `Enter` membuka dialog pilih folder (maksimal 8). Setiap baris folder bertuliskan `[HAPUS]`; `Enter` pada baris itu menghapus folder dari daftar. Daftar kosong berarti cakupan default.
+- `ℹ️ Tentang Yasal`: menampilkan versi `0.1.0`; baris ini tidak interaktif.
 
 ---
 
 ## 8. Theming
 
-- **Integrasi Tema Windows**:
-  - Secara default mengikuti mode Windows (Light/Dark) secara otomatis via API DWM (`DWMWA_USE_IMMERSIVE_DARK_MODE`).
-  - Mendukung opsi manual override di Settings: `Auto (Sistem)`, `Gelap`, atau `Terang`.
-- **Accent Color**: Mengambil accent color Windows aktif secara real-time dari sistem pengguna.
-- **Transparansi / Material**: Windows 11 Acrylic/Mica blur (fallback ke semi-transparent dark/light yang solid & elegan bila Acrylic tidak didukung oleh hardware/driver).
+- **Integrasi tema Windows**:
+  - Mode aplikasi dibaca dari nilai registry `AppsUseLightTheme`; diperiksa ulang sekitar setiap 5 detik saat palette terlihat.
+  - Pilihan manual di Settings: `Otomatis (Sistem)`, `Gelap`, atau `Terang`.
+- **Accent Color**: diambil melalui `DwmGetColorizationColor` dan dipakai pada tema egui.
+- **Transparansi/material**: window transparan menggunakan permukaan dan frame kartu solid yang digambar egui; Acrylic/Mica blur belum diimplementasikan.
 
 ---
 
@@ -140,38 +134,38 @@ Settings disajikan sebagai **interactive list items** (re-use layout baris 44px 
 
 | Properti | Nilai |
 |---|---|
-| Ukuran | Kartu lebar **650px**, tinggi dinamis hingga **500px** untuk menampilkan maksimal 8 baris. Jendela OS 18px lebih besar di setiap sisi (margin transparan untuk bayangan) |
-| Margin konten | 16px horizontal, 8px vertikal |
-| Posisi | **Monitor tempat kursor mouse berada** (bukan selalu monitor utama), center horizontal, sedikit di atas tengah vertikal. Tepi atas dihitung dari tinggi maksimum kartu sehingga tidak bergeser saat jumlah hasil berubah. Skala DPI diambil dari monitor tujuan |
-| Corner radius | 26px (frame), 25px (search field), 14px (highlight), 8px (wadah ikon) |
-| Border frame | Stroke tipis 1px mengikuti accent color Windows |
-| Shadow | Bayangan lembut dilukis egui di margin transparan sekeliling kartu (bayangan DWM native tidak mengikuti sudut 26px). DWM rounding dan border sistem dimatikan |
-| Animasi | Fade in 100ms (easing keluar). Fade out 50ms belum diimplementasikan; jendela langsung disembunyikan |
+| Posisi | Monitor di bawah kursor; fallback ke monitor utama bila pembacaan gagal. Kartu dipusatkan horizontal dan ditempatkan menurut tinggi maksimum; DPI diambil dari monitor tujuan |
+| Sudut & border | Radius 26px; border aksen selebar 1px digambar egui; sudut dan border DWM sistem dinonaktifkan |
+| Shadow | Dilukis egui dalam margin transparan 18px di luar kartu |
+| Margin konten | Horizontal 16px, vertikal 8px |
+| Animasi | Fade-in 100ms; fade-out belum ada, window langsung disembunyikan |
 
 ---
 
 ## 10. Ringkasan Keputusan (Quick Reference)
+✅ Hasil seragam: baris 44px, gap 4px, maksimal 8 baris terlihat sebelum scroll, dan badge kategori.
+✅ Ikon shell 64×64 diekstrak secara lazy dan dirender pada area 28×28 dengan cache PNG di disk.
+✅ Ikon mode, input baru saat palette dibuka, dan `Esc` membersihkan query lalu menutup.
+✅ Empty state berbasis frecency; web search berperingkat rendah sebagai fallback global.
+✅ Settings dapat dicari, dipilih dengan keyboard, serta diaktifkan lewat `Enter` atau klik.
+✅ Action Panel berisi aksi sesuai jenis item; status bar menunjukkan petunjuk per kategori.
+✅ Tema sistem/manual, accent color DWM, dan penempatan monitor mengikuti posisi kursor serta DPI.
+✅ Pengosongan Recycle Bin tanpa dialog; konfirmasi native untuk shutdown/restart/sign out.
 
-- [x] Layout hasil: flat uniform list, 44px row dengan jarak 4px, 24px icon asli (lazy extraction + disk/memory cache)
-- [x] Mode indicator: icon kiri search bar berubah per prefix
-- [x] Search bar lifecycle: fresh input on open, 2-step Esc (clear text → close window)
-- [x] Empty state: recent/frequently used (frecency-based)
-- [x] No-results: pesan polos, tanpa saran web otomatis
-- [x] Settings: built-in searchable list view (44px rows, 4px gap, keyboard-driven)
-- [x] Action Panel: in-place list replacement on `Tab`, breadcrumb di search bar
-- [x] Status Bar: contextual dynamic hints sesuai item & state
-- [x] Theme: sinkronisasi tema Windows + manual override (Auto/Dark/Light) + Accent Color DWM
-- [x] Konfirmasi destruktif: native Windows dialog
-- [x] Multi-monitor: selalu primary display
-- [x] Ctrl+Enter: aksi sekunder default per kategori
-
+Material Acrylic/Mica, color picker, installer, dan auto-updater belum tersedia.
+[docs/archive/implementation_plan.md#6A71]
+PUT 7.=7:
+Command palette untuk Windows yang dibangun dengan **Rust**. Dokumen ini adalah rencana historis; target RAM dan perbandingan produk di bawah merupakan sasaran/catatan lama, bukan hasil ukur atau klaim saat ini.
 ---
 
-## 11. Phase Selanjutnya (Roadmap)
+## 11. Roadmap
 
-- **Phase 2**:
-  - File Search (Everything IPC integration)
-  - Color Picker UI (magnifier loupe overlay & color code copy)
-  - Clipboard History UI & Ring Buffer
-- **Phase 3**:
-  - Installer (WiX / MSIX) & Auto-updater
+### Belum diimplementasikan
+
+- **Color Picker**: overlay pemilih warna layar, loupe pembesar, dan salin kode warna.
+- **Installer/distribusi paket**: installer WiX/MSIX atau paket distribusi siap pasang; README menjelaskan instalasi manual.
+- **Auto-updater**.
+
+### Sudah tersedia
+
+- Pencarian file melalui `es.exe` dengan fallback indeks lokal terbatas.

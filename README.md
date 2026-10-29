@@ -2,52 +2,53 @@
 
 <div align="center">
 
-**Lightweight Windows Command Palette**
+**Windows Command Palette berbasis Rust.**
 
-*Ultra-ringan · Cepat · Terintegrasi Windows Native · Target RAM < 25 MB (< 5 MB saat idle)*
+*Cari aplikasi, file, dan perintah dengan keyboard.*
 
 [![Rust](https://img.shields.io/badge/Rust-2021-orange.svg)](https://www.rust-lang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078d7.svg)](https://microsoft.com/windows)
 
 </div>
 
 ---
 
-## ✨ Fitur Utama (Phase 1 MVP)
+## ✨ Fitur inti
 
 - ⚡ **Global Hotkey (`Alt + Space`)**: Akses instan di mana saja di seluruh Windows.
-- 🚀 **Peluncur Aplikasi (App Launcher)**: Mendeteksi aplikasi Start Menu & Desktop secara otomatis dengan fuzzy matching super cepat.
-  - `Enter`: Buka aplikasi
-  - `Ctrl + Enter`: Jalankan sebagai Administrator (*Run as Admin*)
-  - `Tab`: Buka *Action Panel* kontekstual (Salin path, buka folder lokasi di Explorer).
+- 🚀 **Peluncur Aplikasi**: mencari shortcut Start Menu/Desktop dan aplikasi Windows yang terdaftar di AppsFolder.
+  - `Enter`: Buka aplikasi.
+  - `Ctrl + Enter`: Jalankan shortcut aplikasi sebagai Administrator bila tersedia; aplikasi AppsFolder tanpa aksi sekunder dibuka seperti biasa.
+  - `Tab`: Buka Action Panel jika item menyediakan aksi tambahan.
 - 🔢 **Kalkulator Cepat**:
   - Ketik ekspresi matematika (`= 25 * 4 + 10` atau `100 / 4`), tekan `Enter` untuk langsung menyalin hasil ke clipboard.
+  - Pembagian memakai bilangan real (`10/4` = `2.5`) dan hasilnya dibulatkan tanpa sisa floating point (`0.1+0.2` = `0.3`). Gunakan `.` sebagai pemisah desimal; fungsi seperti `= math::sqrt(16)` juga didukung.
+  - **Konversi satuan** tanpa internet: `5 km to mi`, `72 f in c`, `1.5 jam ke menit`, `2 gb to mb`. Mendukung panjang, massa, volume, suhu, waktu, data, luas, dan kecepatan dengan nama Inggris maupun Indonesia. `Enter` menyalin angkanya saja, `Ctrl + Enter` menyalin beserta satuan. Data memakai awalan SI (1 KB = 1000 B); gunakan `KiB`, `MiB`, `GiB` untuk basis 1024.
 - 🌐 **Pencarian Web & URL Handler**:
   - Prefix `??` untuk mencari di Google/DuckDuckGo/Bing, atau ketik langsung tautan web (`https://...`).
+  - **Alias**: tambahkan entri `web_aliases` di `config.json`, misalnya `{"keyword": "yt", "url": "https://www.youtube.com/results?search_query={query}"}`, lalu ketik `yt rust tutorial`. Keyword hanya boleh berisi huruf, angka, `-`, dan `_` (maksimal 16 karakter). URL harus berawalan `http://` atau `https://` dan memuat `{query}`. Keyword `file`, `cb`, `ip`, `network`, `w`, dan `settings` tidak dapat dipakai. Restart Yasal setelah mengubah `config.json`.
 - 💻 **Perintah Shell**:
   - Prefix `>` untuk menjalankan perintah langsung di Windows PowerShell.
-- 🛡️ **Perintah Sistem Windows**:
-  - Kunci Layar (*Lock*), Mode Tidur (*Sleep*), Kosongkan Recycle Bin, Matikan Komputer (*Shutdown*), Mulai Ulang (*Restart*), dan Keluar Akun (*Sign Out*) disertai konfirmasi native.
-- ⚙️ **Built-in Settings View**:
-  - Ketik `settings` di search bar untuk membuka menu pengaturan interaktif dengan baris 44px dan jarak 4px tanpa mouse.
-- 🎨 **Sinkronisasi Tema Windows**:
-  - Otomatis mengikuti Dark/Light mode Windows dan Accent Color DWM aktif secara real-time.
+  - `Enter` membuka jendela PowerShell baru. `Ctrl + Enter` menjalankan perintah di latar belakang dengan batas 15 detik dan menampilkan hingga 200 baris output di palette. `Enter` pada baris output menyalin baris itu, dan `Enter` pada baris ringkasan menyalin seluruh output.
+- 🛡️ **Perintah Sistem Windows**: kunci layar, Sleep, kosongkan Recycle Bin, Shutdown, Restart, dan Sign Out. Shutdown, Restart, dan Sign Out meminta konfirmasi; pengosongan Recycle Bin berjalan tanpa dialog konfirmasi.
+- ⚙️ **Built-in Settings View**: ketik `settings` untuk membuka dan memfilter pengaturan. Navigasi keyboard tersedia; baris pengaturan juga dapat diklik.
+- 🎨 **Tema Windows**: tema mengikuti mode aplikasi Windows dan warna aksen DWM. Saat palette terlihat, mode sistem diperiksa berkala; tema Gelap/Terang juga tersedia di Settings.
 - 🧠 **Memory Trimming Otomatis**:
-  - Memanfaatkan `EmptyWorkingSet` Win32 API saat window di-hide sehingga konsumsi RAM turun menjadi **< 5 MB**.
+  - Saat palette disembunyikan, Yasal meminta Windows mengurangi **working set** lewat `EmptyWorkingSet`. Nilai memori aktual bergantung pada sistem; working set tidak sama dengan Private Bytes.
 
 ---
 
-## 🔎 Fitur Phase 2
+## 🔎 Pencarian dan fitur tambahan
 
-- **Pencarian file**: gunakan `file <query>`, atau ketik nama file saat tidak ada hasil lokal lain. Yasal memakai Everything `es.exe` jika tersedia; jika tidak, Documents, Desktop, dan Downloads diindeks saat pencarian pertama. Pencarian berjalan di background dengan debounce 150 ms.
-- **Pengalih jendela**: gunakan `w` untuk melihat semua jendela terbuka (yang terakhir dipakai di atas), atau `w <teks>` untuk memfilter berdasarkan judul atau nama program. `Enter` berpindah ke jendela itu dan memulihkannya jika diminimalkan; `Tab` membuka aksi `Tutup jendela`.
-- **Posisi jendela**: palette muncul di monitor tempat kursor mouse berada, di tengah secara horizontal dan sedikit di atas tengah secara vertikal, dengan tepi atas yang selalu sama berapa pun jumlah hasilnya.
-- **Navigasi Pengaturan Windows**: gunakan `$ <query>`, misalnya `$ bluetooth`, `$ display`, atau `$ update`.
-- **Riwayat clipboard**: gunakan `cb` atau `cb <query>`. Enter menyalin item terpilih kembali ke clipboard. Maksimal 50 teks terbaru disimpan hanya di memori; listener berhenti dan riwayat dibersihkan saat plugin dimatikan.
-- **Informasi jaringan**: gunakan `ip` atau `network` untuk IPv4 lokal, gateway, alamat MAC, dan IP publik.
-  - Pengambilan IP publik mengirim request background ke `https://api.ipify.org` saat query pertama, lalu menyimpan hasil hingga 60 detik.
-- Semua plugin Phase 2 dapat diaktifkan atau dinonaktifkan langsung melalui view `settings`. Pintasan global memiliki enam pilihan (tekan `Enter` pada barisnya untuk berganti) dan langsung aktif tanpa memulai ulang Yasal. Jika kombinasinya dipakai aplikasi lain, pilihan berikutnya dicoba otomatis.
+- **Pencarian file**: gunakan `file <query>` untuk mencari secara eksplisit. Untuk query global minimal 3 karakter yang bukan URL, Yasal juga mencoba pencarian file bila tidak ada kecocokan lokal selain fallback Web. Yasal mencari `es.exe` di `PATH` dan lokasi instalasi Everything umum; tanpa `es.exe` atau jika pencarian Everything gagal, pencarian pertama membangun indeks rekursif dari Documents, Desktop, dan Downloads, dibatasi hingga 15.000 entri dan 4 MiB path. Folder pencarian dapat diatur di `settings` lewat baris **Folder Pencarian File**: `Enter` membuka dialog pilih folder Windows, dan `Enter` pada baris folder menghapusnya (maksimal 8 folder). Jika daftar kosong, Everything mencari seluruh indeksnya, atau tanpa Everything, pencarian memakai Documents, Desktop, dan Downloads. Jika daftar berisi folder, Everything hanya mencari di folder tersebut (`es.exe -path`), dan indeks fallback hanya membaca folder itu. Pencarian berjalan di background dengan debounce 150 ms.
+- **Pengalih jendela**: gunakan `w` untuk melihat jendela terbuka atau `w <teks>` untuk memfilter judul/nama program; `Enter` beralih dan memulihkan jendela yang diminimalkan. `Tab` menawarkan aksi menutup jendela.
+- **Pencarian Windows Settings**: gunakan `$ <query>`, misalnya `$ bluetooth`, `$ display`, atau `$ update`.
+- **Riwayat clipboard**: gunakan `cb` atau `cb <query>` untuk menemukan teks yang disalin. Hingga 50 item disimpan sementara di memori saat plugin aktif; riwayat dibersihkan saat plugin atau aplikasi ditutup.
+- **Informasi jaringan**: gunakan `ip` atau `network` untuk melihat IPv4 lokal, gateway, alamat MAC, dan IP publik. Pengambilan IP publik meminta `https://api.ipify.org` di background dan menyimpan hasil 60 detik.
+- **Settings**: ketik `settings` untuk memfilter dan mengubah pengaturan, termasuk plugin, tema, hotkey, dan mesin pencari. Plugin dapat diubah tanpa memulai ulang.
+- **Posisi palette**: monitor di bawah kursor mouse; fallback ke monitor utama bila pembacaan monitor gagal.
+
+Tema mengikuti mode aplikasi Windows dan warna aksen DWM; mode sistem diperiksa berkala saat palette terlihat. Tema Gelap/Terang juga tersedia di Settings.
 
 ---
 
@@ -57,36 +58,73 @@
 |---|---|
 | `Alt + Space` | Buka / Sembunyikan palette Yasal |
 | `↑` / `↓` | Navigasi hasil atau daftar aksi |
-| `Enter` | Eksekusi aksi utama / Salin hasil kalkulator |
-| `Ctrl + Enter` | Aksi sekunder default (*Run as Admin*, salin path, dll.) |
-| `Tab` | Buka **Action Panel** (in-place replacement) untuk item terpilih |
-| `Esc` | Tekan 1x: Bersihkan teks input · Tekan 2x: Tutup palette |
+| `Enter` | Jalankan aksi utama; pada kalkulator dan beberapa hasil jaringan/clipboard, salin hasil atau nilai |
+| `Ctrl + Enter` | Jalankan aksi sekunder bila tersedia, misalnya Run as Admin, tampilkan file di Explorer, salin hasil, atau jalankan perintah `>` dan tampilkan outputnya |
+| `Tab` | Buka **Action Panel** bila item terpilih menyediakan aksi tambahan |
+| `Esc` | Di Action Panel atau Settings: kembali ke pencarian · Di pencarian: bersihkan teks jika ada, jika kosong tutup palette |
 
 ---
 
-## 🛠️ Kompilasi & Menjalankan
+## Build, instal, dan jalankan
 
 ### Persyaratan
-- [Rust Toolchain (2021 Edition)](https://www.rust-lang.org/)
-- Windows 10 (1809+) atau Windows 11
 
-### Menjalankan Mode Development
-```bash
+- Windows 10 versi 1809 atau Windows 11.
+- Rust toolchain, target `x86_64-pc-windows-gnu`, dan linker MinGW-w64 yang kompatibel untuk build dari source. Target build ditetapkan di `.cargo/config.toml`.
+
+### Build dan tes
+
+Jalankan dari root repository. Pasang target Rust jika belum tersedia:
+
+```powershell
+rustup target add x86_64-pc-windows-gnu
+```
+
+Build/run:
+
+```powershell
 cargo run
-```
-
-### Menjalankan Unit & Integration Tests
-```bash
 cargo test
-```
-
-### Build Biner Release Teroptimasi
-```bash
 cargo build --release
 ```
-Biner berekstensi `.exe` mandiri tersedia di `target/x86_64-pc-windows-gnu/release/yasal.exe`.
+
+`cargo run` menjalankan build development. `cargo test` menjalankan unit dan integration tests. Biner release berada di `target/x86_64-pc-windows-gnu/release/yasal.exe`.
+
+### Instalasi manual
+
+Repository belum menyediakan installer atau paket rilis. Setelah build release, jalankan perintah berikut dari root repository untuk memasang biner di lokasi tetap:
+
+```powershell
+$installDir = Join-Path $env:LOCALAPPDATA 'Programs\Yasal'
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Copy-Item 'target\x86_64-pc-windows-gnu\release\yasal.exe' (Join-Path $installDir 'yasal.exe')
+Start-Process -FilePath (Join-Path $installDir 'yasal.exe')
+```
+
+Yasal normalnya berjalan di background dengan ikon system tray; tekan `Alt + Space` untuk membuka palette. Jika ingin Yasal berjalan bersama Windows, aktifkan `Mulai bersama Windows` di `settings` setelah biner diletakkan di lokasi tetap. Windows menyimpan path executable saat itu di registry; nonaktifkan startup sebelum memindahkan biner.
+
+### Konfigurasi dan data lokal
+
+| Lokasi Windows | Isi |
+|---|---|
+| `%APPDATA%\Yasal\config.json` | Preferensi aplikasi dan plugin |
+| `%APPDATA%\Yasal\frecency.json` | Riwayat penggunaan untuk ranking hasil |
+| `%LOCALAPPDATA%\Yasal\IconCache\` | Cache ikon aplikasi/file |
+| `%LOCALAPPDATA%\Yasal\yasal_debug.log` | Log diagnostik, dibatasi sekitar 512 KiB sebelum dimulai ulang |
+
+Riwayat clipboard hanya berada di memori selama plugin aktif; tidak disimpan atau dipulihkan setelah aplikasi dimulai ulang. Jika direktori data lokal Windows tidak tersedia, cache ikon/log menggunakan direktori kerja aplikasi. Jika direktori konfigurasi tidak tersedia, `config.json` menggunakan `Yasal\config.json` di direktori kerja; frecency tidak disimpan tanpa direktori konfigurasi.
+
+### Menghapus instalasi
+
+1. Jika fitur `Mulai bersama Windows` aktif, buka Yasal terlebih dahulu dan matikan pengaturan itu di `settings`. Bila proses Yasal sudah dihentikan, jalankan kembali executable untuk mematikannya.
+2. Pilih **Exit** dari menu ikon system tray.
+3. Hapus folder tempat `yasal.exe` disimpan.
+4. Opsional, hapus `%APPDATA%\Yasal` dan `%LOCALAPPDATA%\Yasal` untuk menghapus preferensi, frecency, cache ikon, dan log.
+
+Paket installer dan auto-updater belum tersedia; pemasangan, pembaruan, dan penghapusan saat ini dilakukan manual.
 
 ---
 
-## 📄 Lisensi
-Didistribusikan di bawah Lisensi MIT.
+## 📄 Lisensi dan distribusi
+
+Source tree belum menyertakan berkas `LICENSE`; klaim lisensi MIT belum dapat diverifikasi. Jangan mendistribusikan aplikasi sebagai MIT sebelum pemegang hak cipta menetapkan dan menambahkan lisensi yang sesuai.

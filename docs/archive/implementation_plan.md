@@ -1,8 +1,10 @@
 # 🌸 Yasal — Lightweight Windows Command Palette
 
 > **Yasal** (يسأل) — *"Bertanya, Mencari Tahu"* (Arab Klasik) · *"Mahkota Bunga"* (Persia Kuno)
+>
+> **Catatan arsip:** dokumen ini merekam rencana historis, bukan status implementasi saat ini. Panduan build/instal dan status rilis kini ada di [README.md](../../README.md); desain dan roadmap terkini ada di [DESIGN.md](../DESIGN.md). Checklist, target RAM `< 25 MB`, perbandingan produk (~740 MB), dan tahap Color Picker di bawah adalah catatan/sasaran lama—bukan hasil ukur atau klaim implementasi saat ini.
 
-Command palette ultra-ringan untuk Windows, dibangun dengan **Rust**. Pengganti PowerToys Command Palette yang boros RAM (~740 MB). Target: **< 25 MB RAM**.
+Command palette untuk Windows yang dibangun dengan **Rust**.
 
 ---
 
@@ -16,9 +18,6 @@ Command palette ultra-ringan untuk Windows, dibangun dengan **Rust**. Pengganti 
 
 > [!NOTE]
 > **File Search**: Menggunakan **[Everything](https://www.voidtools.com/)** melalui `es.exe` bila tersedia. Jika tidak, Yasal membuat indeks terbatas dari direktori umum saat pencarian pertama.
-
-> [!NOTE]
-> **Color Picker**: Ditunda ke **Phase 3** karena memerlukan overlay dan interaksi layar tersendiri.
 
 ---
 
