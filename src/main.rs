@@ -45,7 +45,10 @@ fn main() {
     }
 
     if config.enable_web_search {
-        dispatcher.register(Arc::new(WebSearchPlugin::new(&config.search_engine)));
+        dispatcher.register(Arc::new(WebSearchPlugin::with_aliases(
+            &config.search_engine,
+            &config.web_aliases,
+        )));
     }
 
     if config.enable_shell_command {
@@ -57,7 +60,9 @@ fn main() {
     }
 
     if config.enable_file_search {
-        dispatcher.register(Arc::new(FileSearchPlugin::new()));
+        dispatcher.register(Arc::new(FileSearchPlugin::with_folders(
+            config.search_folder_paths(),
+        )));
     }
 
     if config.enable_windows_settings {

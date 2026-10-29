@@ -1,4 +1,4 @@
-use crate::config::{AppConfig, ThemePreference};
+use crate::config::{AppConfig, ThemePreference, MAX_SEARCH_FOLDERS};
 use crate::core::dispatcher::Dispatcher;
 use crate::core::plugin::QueryResult;
 use crate::logging::log as log_app;
@@ -10,7 +10,7 @@ use crate::plugins::clipboard_history::ClipboardHistoryPlugin;
 use crate::plugins::file_search::FileSearchPlugin;
 use crate::plugins::icon_cache::IconCache;
 use crate::plugins::network_info::NetworkInfoPlugin;
-use crate::plugins::shell_command::ShellCommandPlugin;
+use crate::plugins::shell_command::{ShellCommandPlugin, RUN_INLINE_ID_PREFIX};
 use crate::plugins::system_commands::SystemCommandsPlugin;
 use crate::plugins::web_search::WebSearchPlugin;
 use crate::plugins::win_settings::WinSettingsPlugin;
@@ -34,6 +34,14 @@ use crate::ui::status_bar::{render_status_bar, ViewMode};
 use eframe::egui;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// Results that a background task is still filling in. The palette re-queries while any of
+/// them is shown.
+fn is_pending(result: &QueryResult) -> bool {
+    result.id == "file:indexing"
+        || result.id == "shell:running"
+        || (result.id == "network:status" && result.title.starts_with("Memuat"))
+}
 
 pub struct YasalApp {
     pub config: AppConfig,
@@ -289,7 +297,15 @@ impl YasalApp {
             if let Some(ref sec) = item.secondary_action {
                 let action = sec.action.clone();
                 let item_id = item.id.clone();
+                let stays_open = item_id.starts_with(RUN_INLINE_ID_PREFIX);
                 self.dispatcher.record_use(&item_id);
+                if stays_open {
+                    // The action fills in rows that this palette shows, so keep it open
+                    // and refresh the results instead of hiding.
+                    (action)();
+                    self.update_query();
+                    return;
+                }
                 self.hide_window(ctx);
                 (action)();
             } else {
@@ -327,16 +343,19 @@ impl YasalApp {
 
         match id {
             "calculator" => self.dispatcher.register(Arc::new(CalculatorPlugin::new())),
-            "web_search" => self
-                .dispatcher
-                .register(Arc::new(WebSearchPlugin::new(&self.config.search_engine))),
+            "web_search" => self.dispatcher.register(Arc::new(WebSearchPlugin::with_aliases(
+                &self.config.search_engine,
+                &self.config.web_aliases,
+            ))),
             "shell_command" => self
                 .dispatcher
                 .register(Arc::new(ShellCommandPlugin::new())),
             "system_commands" => self
                 .dispatcher
                 .register(Arc::new(SystemCommandsPlugin::new())),
-            "file_search" => self.dispatcher.register(Arc::new(FileSearchPlugin::new())),
+            "file_search" => self.dispatcher.register(Arc::new(FileSearchPlugin::with_folders(
+                self.config.search_folder_paths(),
+            ))),
             "win_settings" => self.dispatcher.register(Arc::new(WinSettingsPlugin::new())),
             "clipboard_history" => match ClipboardHistoryPlugin::initialize() {
                 Ok(plugin) => self.dispatcher.register(Arc::new(plugin)),
@@ -414,6 +433,7 @@ impl YasalApp {
             "shell" => self.sync_plugin("shell_command", self.config.enable_shell_command),
             "sys" => self.sync_plugin("system_commands", self.config.enable_system_commands),
             "engine" => self.sync_plugin("web_search", self.config.enable_web_search),
+            "folder_add" => self.add_search_folder(),
             "file" => self.sync_plugin("file_search", self.config.enable_file_search),
             "win_settings" => self.sync_plugin("win_settings", self.config.enable_windows_settings),
             "clipboard" => {
@@ -423,6 +443,39 @@ impl YasalApp {
             "windows" => self.sync_plugin("window_switcher", self.config.enable_window_switcher),
             _ => {}
         }
+    }
+
+    /// Opens the native folder picker and adds the chosen folder to the file search scope.
+    fn add_search_folder(&mut self) {
+        if self.config.file_search_folders.len() >= MAX_SEARCH_FOLDERS {
+            self.notice = Some(format!(
+                "Maksimal {MAX_SEARCH_FOLDERS} folder pencarian file."
+            ));
+            return;
+        }
+
+        let Some(folder) = win32::pick_folder(self.hwnd) else {
+            return;
+        };
+        let folder_text = folder.to_string_lossy().into_owned();
+        let already_added = self
+            .config
+            .file_search_folders
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(&folder_text));
+        if already_added {
+            self.notice = Some(format!("{folder_text} sudah ada di daftar pencarian."));
+            return;
+        }
+
+        self.config.file_search_folders.push(folder_text.clone());
+        if let Err(error) = self.config.save() {
+            self.config.file_search_folders.pop();
+            self.notice = Some(format!("Konfigurasi tidak dapat disimpan: {error}"));
+            return;
+        }
+        self.notice = Some(format!("Folder ditambahkan: {folder_text}"));
+        self.sync_plugin("file_search", self.config.enable_file_search);
     }
 
     fn toggle_setting(&mut self, index: usize) {
@@ -586,10 +639,7 @@ impl eframe::App for YasalApp {
             }
         }
 
-        let waiting_for_async_results = self.results.iter().any(|result| {
-            result.id == "file:indexing"
-                || (result.id == "network:status" && result.title.starts_with("Memuat"))
-        });
+        let waiting_for_async_results = self.results.iter().any(is_pending);
         if self.is_visible
             && matches!(self.view_mode, ViewMode::Search)
             && waiting_for_async_results
@@ -598,10 +648,7 @@ impl eframe::App for YasalApp {
             self.selected_index = self
                 .selected_index
                 .min(self.results.len().saturating_sub(1));
-            if self.results.iter().any(|result| {
-                result.id == "file:indexing"
-                    || (result.id == "network:status" && result.title.starts_with("Memuat"))
-            }) {
+            if self.results.iter().any(is_pending) {
                 ctx.request_repaint_after(Duration::from_millis(200));
             }
         }
@@ -868,10 +915,7 @@ impl eframe::App for YasalApp {
         self.sync_window_height(ctx);
 
         // CPU Optimization: Conditional repaint based on activity state
-        let waiting_for_async_results = self.results.iter().any(|result| {
-            result.id == "file:indexing"
-                || (result.id == "network:status" && result.title.starts_with("Memuat"))
-        });
+        let waiting_for_async_results = self.results.iter().any(is_pending);
 
         if waiting_for_async_results {
             // Active async operations (file indexing, network info) - poll frequently

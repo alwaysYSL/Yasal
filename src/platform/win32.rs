@@ -872,3 +872,32 @@ pub fn close_window(hwnd_raw: isize) {
         let _ = PostMessageW(HWND(hwnd_raw as *mut _), WM_CLOSE, WPARAM(0), LPARAM(0));
     }
 }
+
+/// Shows the native "Select Folder" dialog, owned by the palette window `owner_raw`.
+/// Returns `None` when the user cancels or the dialog cannot be created.
+pub fn pick_folder(owner_raw: isize) -> Option<std::path::PathBuf> {
+    use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
+    use windows::Win32::UI::Shell::{
+        FileOpenDialog, IFileOpenDialog, IShellItem, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS,
+        SIGDN_FILESYSPATH,
+    };
+
+    unsafe {
+        let dialog: IFileOpenDialog =
+            CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        let options = dialog.GetOptions().ok()?;
+        dialog
+            .SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)
+            .ok()?;
+        let title = HSTRING::from("Pilih folder pencarian file");
+        let _ = dialog.SetTitle(&title);
+
+        // Show returns an error when the user cancels, which maps to `None` here.
+        dialog.Show(HWND(owner_raw as *mut _)).ok()?;
+        let item: IShellItem = dialog.GetResult().ok()?;
+        let display = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+        let path = display.to_string().ok();
+        CoTaskMemFree(Some(display.0 as *const _));
+        path.map(std::path::PathBuf::from)
+    }
+}

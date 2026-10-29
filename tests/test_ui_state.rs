@@ -40,7 +40,7 @@ fn test_filtered_settings_count() {
     use yasal::ui::settings_view::filtered_setting_count;
 
     let config = AppConfig::default();
-    assert_eq!(filtered_setting_count(&config, "settings"), 14);
+    assert_eq!(filtered_setting_count(&config, "settings"), 15);
     assert_eq!(filtered_setting_count(&config, "settings hotkey"), 1);
     assert_eq!(filtered_setting_count(&config, "theme"), 1);
     assert_eq!(filtered_setting_count(&config, "does-not-exist"), 0);
@@ -86,7 +86,8 @@ fn test_hotkey_setting_persists_and_about_does_not_toggle() {
     let mut config = AppConfig::default();
     assert_eq!(toggle_setting_at(&mut config, 0, ""), Some("hotkey"));
     assert_eq!(config.hotkey, "Ctrl+Space");
-    assert_eq!(toggle_setting_at(&mut config, 13, ""), None);
+    // Row 13 is the folder picker, row 14 is "Tentang Yasal", which does not toggle.
+    assert_eq!(toggle_setting_at(&mut config, 14, ""), None);
 }
 
 #[test]

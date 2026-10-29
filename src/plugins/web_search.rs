@@ -1,15 +1,37 @@
+use crate::config::WebAlias;
 use crate::core::plugin::{ItemIcon, Plugin, QueryResult};
+use crate::logging::log as log_app;
 use crate::platform::win32;
 use std::sync::Arc;
 
 pub struct WebSearchPlugin {
     pub search_engine: String,
+    aliases: Vec<WebAlias>,
 }
 
 impl WebSearchPlugin {
     pub fn new(search_engine: &str) -> Self {
+        Self::with_aliases(search_engine, &[])
+    }
+
+    /// Adds keyword shortcuts such as `yt rust` that open a site's own search.
+    /// Invalid entries are logged and skipped.
+    pub fn with_aliases(search_engine: &str, aliases: &[WebAlias]) -> Self {
+        let aliases = aliases
+            .iter()
+            .filter(|alias| {
+                let valid = alias.is_valid();
+                if !valid {
+                    log_app(&format!("Alias pencarian web dilewati: {}", alias.keyword));
+                }
+                valid
+            })
+            .cloned()
+            .collect();
+
         Self {
             search_engine: search_engine.to_string(),
+            aliases,
         }
     }
 
@@ -39,6 +61,42 @@ impl WebSearchPlugin {
             "bing" => format!("https://www.bing.com/search?q={}", encoded),
             _ => format!("https://www.google.com/search?q={}", encoded),
         }
+    }
+
+    /// `<keyword> <search text>` where `<keyword>` is an alias. Returns `None` when the
+    /// text does not start with an alias or has no search text after it.
+    fn alias_result(&self, text: &str) -> Option<QueryResult> {
+        let (keyword, search) = text.split_once(char::is_whitespace)?;
+        let search = search.trim();
+        if search.is_empty() {
+            return None;
+        }
+
+        let alias = self
+            .aliases
+            .iter()
+            .find(|alias| alias.keyword.eq_ignore_ascii_case(keyword))?;
+        let url = alias.url.replace("{query}", &urlencoding::encode(search));
+        let url_clone = url.clone();
+
+        Some(QueryResult {
+            id: format!("web-alias:{}:{}", alias.keyword.to_lowercase(), search),
+            title: format!("Cari \"{}\" dengan {}", search, alias.keyword),
+            subtitle: Some(url),
+            category: "Web".to_string(),
+            icon: ItemIcon::Symbolic("web"),
+            score: 1_100,
+            primary_action: Arc::new(move || {
+                if open::that_detached(&url_clone).is_err() {
+                    win32::show_error_dialog(
+                        "Pencarian Tidak Dapat Dibuka",
+                        "Browser bawaan Windows tidak tersedia.",
+                    );
+                }
+            }),
+            secondary_action: None,
+            additional_actions: Vec::new(),
+        })
     }
 }
 
@@ -97,6 +155,10 @@ impl Plugin for WebSearchPlugin {
 
         if query_text.is_empty() {
             return Vec::new();
+        }
+
+        if let Some(result) = self.alias_result(query_text) {
+            return vec![result];
         }
 
         if Self::is_url(query_text) {

@@ -38,6 +38,7 @@ impl FileEntry {
 
 pub struct FileSearchPlugin {
     everything: Option<PathBuf>,
+    folders: Vec<PathBuf>,
     index: Arc<OnceLock<Vec<FileEntry>>>,
     search: Arc<Mutex<SearchState>>,
     worker_tx: Mutex<Option<mpsc::Sender<String>>>,
@@ -52,9 +53,18 @@ struct SearchState {
 }
 
 impl FileSearchPlugin {
+    /// Searches the default scope: the whole Everything index, or Documents, Desktop and
+    /// Downloads when Everything is not installed.
     pub fn new() -> Self {
+        Self::with_folders(Vec::new())
+    }
+
+    /// Limits search to `folders` when the list is not empty. Everything runs one `-path`
+    /// query per folder, and the fallback index is built only from those folders.
+    pub fn with_folders(folders: Vec<PathBuf>) -> Self {
         Self {
             everything: find_everything_cli(),
+            folders,
             index: Arc::new(OnceLock::new()),
             search: Arc::new(Mutex::new(SearchState::default())),
             worker_tx: Mutex::new(None),
@@ -70,9 +80,10 @@ impl FileSearchPlugin {
         let search = Arc::clone(&self.search);
         let index = Arc::clone(&self.index);
         let everything = self.everything.clone();
+        let folders = self.folders.clone();
         std::thread::Builder::new()
             .name("yasal-file-search".to_string())
-            .spawn(move || file_search_worker(rx, search, index, everything))
+            .spawn(move || file_search_worker(rx, search, index, everything, folders))
             .ok()?;
         *sender = Some(tx.clone());
         Some(tx)
@@ -89,6 +100,7 @@ impl FileSearchPlugin {
 
         Self {
             everything: None,
+            folders: Vec::new(),
             index: Arc::new(index),
             search: Arc::new(Mutex::new(SearchState::default())),
             worker_tx: Mutex::new(None),
@@ -101,6 +113,7 @@ fn file_search_worker(
     search: Arc<Mutex<SearchState>>,
     index: Arc<OnceLock<Vec<FileEntry>>>,
     everything: Option<PathBuf>,
+    folders: Vec<PathBuf>,
 ) {
     while let Ok(mut query) = rx.recv() {
         loop {
@@ -110,8 +123,8 @@ fn file_search_worker(
                 Err(mpsc::RecvTimeoutError::Disconnected) => return,
             }
         }
-        let entries = search_everything(everything.as_ref(), &query).unwrap_or_else(|| {
-            let entries = index.get_or_init(build_fallback_index);
+        let entries = search_everything(everything.as_ref(), &folders, &query).unwrap_or_else(|| {
+            let entries = index.get_or_init(|| build_fallback_index(search_roots(&folders)));
             rank_entries(entries.iter(), &query)
         });
         if let Ok(mut state) = search.lock() {
@@ -124,12 +137,61 @@ fn file_search_worker(
     }
 }
 
-fn search_everything(executable: Option<&PathBuf>, query: &str) -> Option<Vec<FileEntry>> {
+/// Searches with Everything. Without custom folders this is one query over the whole index.
+/// With custom folders, each folder gets its own `-path` query in parallel, and the results
+/// are merged and ranked together.
+fn search_everything(
+    executable: Option<&PathBuf>,
+    folders: &[PathBuf],
+    query: &str,
+) -> Option<Vec<FileEntry>> {
     let executable = executable?;
-    let mut child = Command::new(executable)
+    let scopes: Vec<Option<&PathBuf>> = if folders.is_empty() {
+        vec![None]
+    } else {
+        folders.iter().map(Some).collect()
+    };
+
+    let outputs: Vec<Option<Vec<FileEntry>>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = scopes
+            .iter()
+            .map(|&folder| scope.spawn(move || run_everything(executable, folder, query)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().ok().flatten())
+            .collect()
+    });
+
+    // Fall back to the local index only when every query failed.
+    if outputs.iter().all(Option::is_none) {
+        return None;
+    }
+
+    let mut seen = HashSet::new();
+    let entries = outputs
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| seen.insert(entry.path.clone()))
+        .collect::<Vec<_>>();
+    Some(rank_entries(entries.iter(), query))
+}
+
+fn run_everything(
+    executable: &PathBuf,
+    folder: Option<&PathBuf>,
+    query: &str,
+) -> Option<Vec<FileEntry>> {
+    let mut command = Command::new(executable);
+    command
         .arg("-utf8")
         .arg("-n")
-        .arg(MAX_EVERYTHING_RESULTS.to_string())
+        .arg(MAX_EVERYTHING_RESULTS.to_string());
+    if let Some(folder) = folder {
+        command.arg("-path").arg(folder);
+    }
+    let mut child = command
         .arg(query)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -175,7 +237,7 @@ fn search_everything(executable: Option<&PathBuf>, query: &str) -> Option<Vec<Fi
         .filter_map(|line| FileEntry::from_path(PathBuf::from(line.trim_end())))
         .collect::<Vec<_>>();
 
-    Some(rank_entries(entries.iter(), query))
+    Some(entries)
 }
 
 impl Default for FileSearchPlugin {
@@ -389,7 +451,12 @@ fn find_everything_cli() -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-fn build_fallback_index() -> Vec<FileEntry> {
+/// Folders that file search covers: the user's list, or Documents, Desktop and Downloads.
+fn search_roots(folders: &[PathBuf]) -> Vec<PathBuf> {
+    if !folders.is_empty() {
+        return folders.to_vec();
+    }
+
     let mut roots = Vec::new();
     if let Some(path) = dirs::document_dir() {
         roots.push(path);
@@ -400,7 +467,10 @@ fn build_fallback_index() -> Vec<FileEntry> {
     if let Some(path) = dirs::download_dir() {
         roots.push(path);
     }
+    roots
+}
 
+fn build_fallback_index(mut roots: Vec<PathBuf>) -> Vec<FileEntry> {
     let mut seen_roots = HashSet::new();
     roots.retain(|path| seen_roots.insert(path.clone()));
 
