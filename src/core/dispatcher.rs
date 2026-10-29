@@ -63,7 +63,7 @@ impl Dispatcher {
                     !textual_prefix || rest.is_empty() || rest.starts_with(char::is_whitespace)
                 });
                 if matches {
-                    return plugin.query(remainder.unwrap_or_default().trim());
+                    return plugin.query_prefixed(remainder.unwrap_or_default().trim());
                 }
             }
         }

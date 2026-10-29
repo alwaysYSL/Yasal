@@ -36,3 +36,23 @@ fn test_dispatcher_mode_detection() {
     assert_eq!(dispatcher.detect_mode_icon("network"), "network");
     assert_eq!(dispatcher.detect_mode_icon("visual studio"), "search");
 }
+
+#[test]
+fn test_dispatcher_routes_calculator_and_unit_conversions() {
+    use std::sync::Arc;
+    use yasal::core::dispatcher::Dispatcher;
+    use yasal::plugins::calculator::CalculatorPlugin;
+
+    let mut dispatcher = Dispatcher::new();
+    dispatcher.register(Arc::new(CalculatorPlugin::new()));
+
+    // Prefixed: no operator needed once the user typed "=".
+    assert_eq!(dispatcher.dispatch("= math::sqrt(16)")[0].title, "= 4");
+    // Real division through the full dispatch path.
+    assert_eq!(dispatcher.dispatch("10/4")[0].title, "= 2.5");
+    // Conversions are found by unprefixed global search too.
+    assert_eq!(dispatcher.dispatch("5 km to mi")[0].title, "= 3.106856 mi");
+    // Ordinary words and incompatible units must not produce calculator noise.
+    assert!(dispatcher.dispatch("word to pdf").is_empty());
+    assert!(dispatcher.dispatch("5 km to kg").is_empty());
+}

@@ -47,4 +47,11 @@ pub trait Plugin: Send + Sync {
 
     /// Query the plugin with input and return scored results
     fn query(&self, input: &str) -> Vec<QueryResult>;
+
+    /// Called instead of `query` when the user typed this plugin's prefix, with the
+    /// prefix already removed. Plugins whose unprefixed `query` is deliberately strict
+    /// (to avoid noise in global search) can override this to be more permissive.
+    fn query_prefixed(&self, input: &str) -> Vec<QueryResult> {
+        self.query(input)
+    }
 }

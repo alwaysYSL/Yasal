@@ -6,6 +6,7 @@ pub mod icon_cache;
 pub mod network_info;
 pub mod shell_command;
 pub mod system_commands;
+pub mod units;
 pub mod web_search;
 pub mod win_settings;
 pub mod window_switcher;
