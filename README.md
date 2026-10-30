@@ -1,98 +1,76 @@
-# 🌸 Yasal (يسأل)
+**Language:** English · [Indonesia](README.id.md)
 
-<div align="center">
+# Yasal (يسأل)
 
-**Windows Command Palette berbasis Rust.**
-
-*Cari aplikasi, file, dan perintah dengan keyboard.*
+A Windows command palette written in Rust. Search apps, files, and commands from the keyboard.
 
 [![Rust](https://img.shields.io/badge/Rust-2021-orange.svg)](https://www.rust-lang.org/)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078d7.svg)](https://microsoft.com/windows)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-</div>
+## Features
 
----
+- **Global hotkey** (`Alt + Space`): open the palette from anywhere. The hotkey is configurable in `settings`.
+- **App launcher**: Start Menu/Desktop shortcuts and registered AppsFolder apps.
+  - `Enter` opens. `Ctrl + Enter` runs a shortcut as Administrator when available. `Tab` opens the Action Panel.
+- **Calculator**: type `= 25 * 4 + 10` or `100 / 4`. `Enter` copies the result.
+  - Real-number division (`10/4` = `2.5`), floating-point noise rounded away (`0.1+0.2` = `0.3`). Use `.` as the decimal separator. Functions such as `= math::sqrt(16)` work.
+  - **Offline unit conversion**: `5 km to mi`, `72 f in c`, `1.5 jam ke menit`, `2 gb to mb`. Length, mass, volume, temperature, time, data, area, speed; English and Indonesian unit names. `Enter` copies the number, `Ctrl + Enter` copies it with the unit. Data uses SI prefixes (1 KB = 1000 B); use `KiB`, `MiB`, `GiB` for base 1024.
+- **Web search and URL handler**: prefix `??` to search Google, DuckDuckGo, or Bing. Typing a URL opens it.
+  - **Aliases**: add `web_aliases` entries to `config.json`, e.g. `{"keyword": "yt", "url": "https://www.youtube.com/results?search_query={query}"}`, then type `yt rust tutorial`. Keywords: letters, digits, `-`, `_`, max 16 characters. URLs must start with `http://` or `https://` and contain `{query}`. Reserved keywords: `file`, `cb`, `ip`, `network`, `w`, `settings`. Restart Yasal after editing `config.json`.
+- **Shell commands**: prefix `>` to run a PowerShell command.
+  - `Enter` opens a new PowerShell window. `Ctrl + Enter` runs it in the background (15 s limit) and shows up to 200 output lines in the palette. `Enter` on an output line copies that line; `Enter` on the summary row copies all output.
+- **Windows system commands**: lock, Sleep, empty Recycle Bin, Shutdown, Restart, Sign Out. Shutdown, Restart, and Sign Out ask for confirmation. Emptying the Recycle Bin does not.
+- **Settings view**: type `settings` to filter and change settings. Keyboard and mouse both work.
+- **Windows theme**: follows the Windows app mode and DWM accent color. Dark/Light can also be set in Settings.
+- **Automatic memory trimming**: when the palette is hidden, Yasal asks Windows to shrink the working set via `EmptyWorkingSet`. Actual numbers depend on the system; working set is not Private Bytes.
 
-## ✨ Fitur inti
+### More search and utilities
 
-- ⚡ **Global Hotkey (`Alt + Space`)**: Akses instan di mana saja di seluruh Windows.
-- 🚀 **Peluncur Aplikasi**: mencari shortcut Start Menu/Desktop dan aplikasi Windows yang terdaftar di AppsFolder.
-  - `Enter`: Buka aplikasi.
-  - `Ctrl + Enter`: Jalankan shortcut aplikasi sebagai Administrator bila tersedia; aplikasi AppsFolder tanpa aksi sekunder dibuka seperti biasa.
-  - `Tab`: Buka Action Panel jika item menyediakan aksi tambahan.
-- 🔢 **Kalkulator Cepat**:
-  - Ketik ekspresi matematika (`= 25 * 4 + 10` atau `100 / 4`), tekan `Enter` untuk langsung menyalin hasil ke clipboard.
-  - Pembagian memakai bilangan real (`10/4` = `2.5`) dan hasilnya dibulatkan tanpa sisa floating point (`0.1+0.2` = `0.3`). Gunakan `.` sebagai pemisah desimal; fungsi seperti `= math::sqrt(16)` juga didukung.
-  - **Konversi satuan** tanpa internet: `5 km to mi`, `72 f in c`, `1.5 jam ke menit`, `2 gb to mb`. Mendukung panjang, massa, volume, suhu, waktu, data, luas, dan kecepatan dengan nama Inggris maupun Indonesia. `Enter` menyalin angkanya saja, `Ctrl + Enter` menyalin beserta satuan. Data memakai awalan SI (1 KB = 1000 B); gunakan `KiB`, `MiB`, `GiB` untuk basis 1024.
-- 🌐 **Pencarian Web & URL Handler**:
-  - Prefix `??` untuk mencari di Google/DuckDuckGo/Bing, atau ketik langsung tautan web (`https://...`).
-  - **Alias**: tambahkan entri `web_aliases` di `config.json`, misalnya `{"keyword": "yt", "url": "https://www.youtube.com/results?search_query={query}"}`, lalu ketik `yt rust tutorial`. Keyword hanya boleh berisi huruf, angka, `-`, dan `_` (maksimal 16 karakter). URL harus berawalan `http://` atau `https://` dan memuat `{query}`. Keyword `file`, `cb`, `ip`, `network`, `w`, dan `settings` tidak dapat dipakai. Restart Yasal setelah mengubah `config.json`.
-- 💻 **Perintah Shell**:
-  - Prefix `>` untuk menjalankan perintah langsung di Windows PowerShell.
-  - `Enter` membuka jendela PowerShell baru. `Ctrl + Enter` menjalankan perintah di latar belakang dengan batas 15 detik dan menampilkan hingga 200 baris output di palette. `Enter` pada baris output menyalin baris itu, dan `Enter` pada baris ringkasan menyalin seluruh output.
-- 🛡️ **Perintah Sistem Windows**: kunci layar, Sleep, kosongkan Recycle Bin, Shutdown, Restart, dan Sign Out. Shutdown, Restart, dan Sign Out meminta konfirmasi; pengosongan Recycle Bin berjalan tanpa dialog konfirmasi.
-- ⚙️ **Built-in Settings View**: ketik `settings` untuk membuka dan memfilter pengaturan. Navigasi keyboard tersedia; baris pengaturan juga dapat diklik.
-- 🎨 **Tema Windows**: tema mengikuti mode aplikasi Windows dan warna aksen DWM. Saat palette terlihat, mode sistem diperiksa berkala; tema Gelap/Terang juga tersedia di Settings.
-- 🧠 **Memory Trimming Otomatis**:
-  - Saat palette disembunyikan, Yasal meminta Windows mengurangi **working set** lewat `EmptyWorkingSet`. Nilai memori aktual bergantung pada sistem; working set tidak sama dengan Private Bytes.
+- **File search**: `file <query>`. For global queries of 3+ characters that are not URLs, Yasal also tries file search when there is no local match other than the Web fallback.
+  - Yasal looks for `es.exe` (Everything CLI) in `PATH` and common install locations. Without `es.exe`, or if Everything fails, the first search builds a recursive index of Documents, Desktop, and Downloads, capped at 15,000 entries and 4 MiB of paths.
+  - Search folders are set in `settings` under **Folder Pencarian File**: `Enter` opens a folder picker; `Enter` on a folder row removes it (max 8). With an empty list, Everything searches its whole index, or the fallback index uses Documents, Desktop, and Downloads. With folders set, Everything uses `es.exe -path` and the fallback index reads only those folders.
+  - Search runs in the background with a 150 ms debounce.
+- **Window switcher**: `w` lists open windows, `w <text>` filters by title or process. `Enter` switches and restores minimized windows. `Tab` offers a close action.
+- **Windows Settings search**: `$ <query>`, e.g. `$ bluetooth`.
+- **Clipboard history**: `cb` or `cb <query>`. Up to 50 text items, in memory only while the plugin is enabled. Cleared when the plugin or app closes.
+- **Network info**: `ip` or `network` shows local IPv4, gateway, MAC address, and public IP. The public IP is fetched from `https://api.ipify.org` in the background and cached for 60 s. This is the only outbound network request Yasal makes on its own.
+- **Palette position**: monitor under the mouse cursor, falling back to the primary monitor.
 
----
+## Keyboard shortcuts
 
-## 🔎 Pencarian dan fitur tambahan
-
-- **Pencarian file**: gunakan `file <query>` untuk mencari secara eksplisit. Untuk query global minimal 3 karakter yang bukan URL, Yasal juga mencoba pencarian file bila tidak ada kecocokan lokal selain fallback Web. Yasal mencari `es.exe` di `PATH` dan lokasi instalasi Everything umum; tanpa `es.exe` atau jika pencarian Everything gagal, pencarian pertama membangun indeks rekursif dari Documents, Desktop, dan Downloads, dibatasi hingga 15.000 entri dan 4 MiB path. Folder pencarian dapat diatur di `settings` lewat baris **Folder Pencarian File**: `Enter` membuka dialog pilih folder Windows, dan `Enter` pada baris folder menghapusnya (maksimal 8 folder). Jika daftar kosong, Everything mencari seluruh indeksnya, atau tanpa Everything, pencarian memakai Documents, Desktop, dan Downloads. Jika daftar berisi folder, Everything hanya mencari di folder tersebut (`es.exe -path`), dan indeks fallback hanya membaca folder itu. Pencarian berjalan di background dengan debounce 150 ms.
-- **Pengalih jendela**: gunakan `w` untuk melihat jendela terbuka atau `w <teks>` untuk memfilter judul/nama program; `Enter` beralih dan memulihkan jendela yang diminimalkan. `Tab` menawarkan aksi menutup jendela.
-- **Pencarian Windows Settings**: gunakan `$ <query>`, misalnya `$ bluetooth`, `$ display`, atau `$ update`.
-- **Riwayat clipboard**: gunakan `cb` atau `cb <query>` untuk menemukan teks yang disalin. Hingga 50 item disimpan sementara di memori saat plugin aktif; riwayat dibersihkan saat plugin atau aplikasi ditutup.
-- **Informasi jaringan**: gunakan `ip` atau `network` untuk melihat IPv4 lokal, gateway, alamat MAC, dan IP publik. Pengambilan IP publik meminta `https://api.ipify.org` di background dan menyimpan hasil 60 detik.
-- **Settings**: ketik `settings` untuk memfilter dan mengubah pengaturan, termasuk plugin, tema, hotkey, dan mesin pencari. Plugin dapat diubah tanpa memulai ulang.
-- **Posisi palette**: monitor di bawah kursor mouse; fallback ke monitor utama bila pembacaan monitor gagal.
-
-Tema mengikuti mode aplikasi Windows dan warna aksen DWM; mode sistem diperiksa berkala saat palette terlihat. Tema Gelap/Terang juga tersedia di Settings.
-
----
-
-## ⌨️ Pintasan Keyboard
-
-| Tombol | Aksi |
+| Key | Action |
 |---|---|
-| `Alt + Space` | Buka / Sembunyikan palette Yasal |
-| `↑` / `↓` | Navigasi hasil atau daftar aksi |
-| `Enter` | Jalankan aksi utama; pada kalkulator dan beberapa hasil jaringan/clipboard, salin hasil atau nilai |
-| `Ctrl + Enter` | Jalankan aksi sekunder bila tersedia, misalnya Run as Admin, tampilkan file di Explorer, salin hasil, atau jalankan perintah `>` dan tampilkan outputnya |
-| `Tab` | Buka **Action Panel** bila item terpilih menyediakan aksi tambahan |
-| `Esc` | Di Action Panel atau Settings: kembali ke pencarian · Di pencarian: bersihkan teks jika ada, jika kosong tutup palette |
+| `Alt + Space` | Show / hide the palette |
+| `↑` / `↓` | Navigate results or actions |
+| `Enter` | Primary action. On calculator, network, and clipboard results, copies the value |
+| `Ctrl + Enter` | Secondary action when available: Run as Admin, show file in Explorer, copy result, run `>` command and show output |
+| `Tab` | Open the Action Panel when the selected item has extra actions |
+| `Esc` | In Action Panel or Settings: back to search. In search: clear text, or close the palette if empty |
 
----
+## Build, install, run
 
-## Build, instal, dan jalankan
+### Requirements
 
-### Persyaratan
+- Windows 10 version 1809 or Windows 11.
+- Rust toolchain, the `x86_64-pc-windows-gnu` target, and a compatible MinGW-w64 linker. The build target is set in `.cargo/config.toml`.
 
-- Windows 10 versi 1809 atau Windows 11.
-- Rust toolchain, target `x86_64-pc-windows-gnu`, dan linker MinGW-w64 yang kompatibel untuk build dari source. Target build ditetapkan di `.cargo/config.toml`.
+### Build and test
 
-### Build dan tes
-
-Jalankan dari root repository. Pasang target Rust jika belum tersedia:
+From the repository root:
 
 ```powershell
 rustup target add x86_64-pc-windows-gnu
-```
-
-Build/run:
-
-```powershell
 cargo run
 cargo test
 cargo build --release
 ```
 
-`cargo run` menjalankan build development. `cargo test` menjalankan unit dan integration tests. Biner release berada di `target/x86_64-pc-windows-gnu/release/yasal.exe`.
+The release binary is at `target/x86_64-pc-windows-gnu/release/yasal.exe`.
 
-### Instalasi manual
+### Manual install
 
-Repository belum menyediakan installer atau paket rilis. Setelah build release, jalankan perintah berikut dari root repository untuk memasang biner di lokasi tetap:
+There is no installer or release package yet. After a release build:
 
 ```powershell
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\Yasal'
@@ -101,30 +79,34 @@ Copy-Item 'target\x86_64-pc-windows-gnu\release\yasal.exe' (Join-Path $installDi
 Start-Process -FilePath (Join-Path $installDir 'yasal.exe')
 ```
 
-Yasal normalnya berjalan di background dengan ikon system tray; tekan `Alt + Space` untuk membuka palette. Jika ingin Yasal berjalan bersama Windows, aktifkan `Mulai bersama Windows` di `settings` setelah biner diletakkan di lokasi tetap. Windows menyimpan path executable saat itu di registry; nonaktifkan startup sebelum memindahkan biner.
+Yasal runs in the background with a system tray icon; press `Alt + Space` to open the palette. To start with Windows, enable `Mulai bersama Windows` in `settings` once the binary is in its final location. Windows stores the executable path in the registry, so disable startup before moving the binary.
 
-### Konfigurasi dan data lokal
+### Configuration and local data
 
-| Lokasi Windows | Isi |
+| Location | Contents |
 |---|---|
-| `%APPDATA%\Yasal\config.json` | Preferensi aplikasi dan plugin |
-| `%APPDATA%\Yasal\frecency.json` | Riwayat penggunaan untuk ranking hasil |
-| `%LOCALAPPDATA%\Yasal\IconCache\` | Cache ikon aplikasi/file |
-| `%LOCALAPPDATA%\Yasal\yasal_debug.log` | Log diagnostik, dibatasi sekitar 512 KiB sebelum dimulai ulang |
+| `%APPDATA%\Yasal\config.json` | App and plugin preferences |
+| `%APPDATA%\Yasal\frecency.json` | Usage history for result ranking |
+| `%LOCALAPPDATA%\Yasal\IconCache\` | App/file icon cache |
+| `%LOCALAPPDATA%\Yasal\yasal_debug.log` | Diagnostic log, capped near 512 KiB before restart |
 
-Riwayat clipboard hanya berada di memori selama plugin aktif; tidak disimpan atau dipulihkan setelah aplikasi dimulai ulang. Jika direktori data lokal Windows tidak tersedia, cache ikon/log menggunakan direktori kerja aplikasi. Jika direktori konfigurasi tidak tersedia, `config.json` menggunakan `Yasal\config.json` di direktori kerja; frecency tidak disimpan tanpa direktori konfigurasi.
+Clipboard history is never written to disk. If the local data directory is unavailable, the icon cache and log use the working directory. If the config directory is unavailable, `config.json` uses `Yasal\config.json` in the working directory and frecency is not saved.
 
-### Menghapus instalasi
+### Uninstall
 
-1. Jika fitur `Mulai bersama Windows` aktif, buka Yasal terlebih dahulu dan matikan pengaturan itu di `settings`. Bila proses Yasal sudah dihentikan, jalankan kembali executable untuk mematikannya.
-2. Pilih **Exit** dari menu ikon system tray.
-3. Hapus folder tempat `yasal.exe` disimpan.
-4. Opsional, hapus `%APPDATA%\Yasal` dan `%LOCALAPPDATA%\Yasal` untuk menghapus preferensi, frecency, cache ikon, dan log.
+1. If `Mulai bersama Windows` is on, open Yasal and turn it off in `settings`. If Yasal is already stopped, run the executable again first.
+2. Choose **Exit** from the tray icon menu.
+3. Delete the folder containing `yasal.exe`.
+4. Optional: delete `%APPDATA%\Yasal` and `%LOCALAPPDATA%\Yasal` to remove preferences, frecency, icon cache, and logs.
 
-Paket installer dan auto-updater belum tersedia; pemasangan, pembaruan, dan penghapusan saat ini dilakukan manual.
+## Contributing
 
----
+See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture notes are in [docs/DESIGN.md](docs/DESIGN.md).
 
-## 📄 Lisensi dan distribusi
+## License
 
-Source tree belum menyertakan berkas `LICENSE`; klaim lisensi MIT belum dapat diverifikasi. Jangan mendistribusikan aplikasi sebagai MIT sebelum pemegang hak cipta menetapkan dan menambahkan lisensi yang sesuai.
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT), at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Yasal by you, as defined in the Apache-2.0 license, is dual licensed as above, without any additional terms or conditions.
+
+`vendor/eframe` is a locally patched copy of `eframe` 0.29.1 (MIT OR Apache-2.0, © Emil Ernerfeldt). Its original license files are included in that directory.

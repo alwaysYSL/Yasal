@@ -35,28 +35,28 @@ Berdasarkan pengujian dan screenshot dari pengguna (`media_1789745055759.png` da
   3. Perbaiki routing event menu tray `TrayAction::OpenSettings`.
 
 ### 6. Ekstraksi Native Icon Aplikasi Windows
-* **Solusi:** Implementasikan ekstraksi icon asli Windows via Win32 `SHGetFileInfoW` (`SHGFI_ICON | SHGFI_LARGEICON`) dan disk cache di `%LOCALAPPDATA%\Yasal\IconCache\` sesuai [DESIGN.md](file:///f:/Projek/Yasal/docs/DESIGN.md) section 2.
+* **Solusi:** Implementasikan ekstraksi icon asli Windows via Win32 `SHGetFileInfoW` (`SHGFI_ICON | SHGFI_LARGEICON`) dan disk cache di `%LOCALAPPDATA%\Yasal\IconCache\` sesuai [DESIGN.md](../DESIGN.md) section 2.
 
 ---
 
 ## Proposed Changes
 
 ### Component 1: Platform & Win32 Helpers (`src/platform/win32.rs`)
-#### [MODIFY] [win32.rs](file:///f:/Projek/Yasal/src/platform/win32.rs)
+#### [MODIFY] [win32.rs](../../src/platform/win32.rs)
 - Tambahkan `center_window_on_primary_display(hwnd: isize, width: i32, height: i32)`.
 - Tambahkan helper ekstraksi icon native aplikasi `extract_and_cache_icon(app_path: &Path, out_png_path: &Path) -> bool`.
 
 ### Component 2: UI Panels & Layout (`src/app.rs`, `src/ui/status_bar.rs`, `src/ui/settings_view.rs`)
-#### [MODIFY] [app.rs](file:///f:/Projek/Yasal/src/app.rs)
+#### [MODIFY] [app.rs](../../src/app.rs)
 - Ubah arsitektur rendering ke `TopBottomPanel::top` (Search Bar), `TopBottomPanel::bottom` (Status Bar), dan `CentralPanel` (Results / Content).
 - Perbaiki logika query filter untuk mode Settings.
 - Pastikan `request_focus = true` di seluruh transisi keyboard `Esc` dan `Tab`.
 - Integrasikan pemanggilan `center_window_on_primary_display`.
 
-#### [MODIFY] [status_bar.rs](file:///f:/Projek/Yasal/src/ui/status_bar.rs)
+#### [MODIFY] [status_bar.rs](../../src/ui/status_bar.rs)
 - Bersihkan karakter unicode yang hilang (`⏎`, `⇥`) menjadi tombol teks bersih (`Enter`, `Tab`, `Ctrl+Enter`, `Esc`).
 
-#### [MODIFY] [settings_view.rs](file:///f:/Projek/Yasal/src/ui/settings_view.rs)
+#### [MODIFY] [settings_view.rs](../../src/ui/settings_view.rs)
 - Perbaiki filter query pencarian settings agar selalu menampilkan seluruh item ketika pengguna berada di mode settings default.
 
 ---
