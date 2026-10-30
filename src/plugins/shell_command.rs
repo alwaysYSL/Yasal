@@ -151,9 +151,9 @@ fn start_run(command: String, run: SharedRun) -> Arc<dyn Fn() + Send + Sync> {
             let Ok(mut guard) = run.lock() else {
                 return;
             };
-            let already_running = guard
-                .as_ref()
-                .is_some_and(|current| current.command == command && current.state == RunState::Running);
+            let already_running = guard.as_ref().is_some_and(|current| {
+                current.command == command && current.state == RunState::Running
+            });
             if already_running {
                 return;
             }
@@ -317,7 +317,9 @@ fn status_result(command: &str, state: &RunState) -> QueryResult {
             QueryResult {
                 id: "shell:running".to_string(),
                 title: "Menjalankan perintah…".to_string(),
-                subtitle: Some("Output muncul di sini setelah selesai · Enter: buka di PowerShell".to_string()),
+                subtitle: Some(
+                    "Output muncul di sini setelah selesai · Enter: buka di PowerShell".to_string(),
+                ),
                 category: "Perintah Shell".to_string(),
                 icon: ItemIcon::Symbolic("shell"),
                 score: 999,

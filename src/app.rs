@@ -343,19 +343,23 @@ impl YasalApp {
 
         match id {
             "calculator" => self.dispatcher.register(Arc::new(CalculatorPlugin::new())),
-            "web_search" => self.dispatcher.register(Arc::new(WebSearchPlugin::with_aliases(
-                &self.config.search_engine,
-                &self.config.web_aliases,
-            ))),
+            "web_search" => self
+                .dispatcher
+                .register(Arc::new(WebSearchPlugin::with_aliases(
+                    &self.config.search_engine,
+                    &self.config.web_aliases,
+                ))),
             "shell_command" => self
                 .dispatcher
                 .register(Arc::new(ShellCommandPlugin::new())),
             "system_commands" => self
                 .dispatcher
                 .register(Arc::new(SystemCommandsPlugin::new())),
-            "file_search" => self.dispatcher.register(Arc::new(FileSearchPlugin::with_folders(
-                self.config.search_folder_paths(),
-            ))),
+            "file_search" => self
+                .dispatcher
+                .register(Arc::new(FileSearchPlugin::with_folders(
+                    self.config.search_folder_paths(),
+                ))),
             "win_settings" => self.dispatcher.register(Arc::new(WinSettingsPlugin::new())),
             "clipboard_history" => match ClipboardHistoryPlugin::initialize() {
                 Ok(plugin) => self.dispatcher.register(Arc::new(plugin)),

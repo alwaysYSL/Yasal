@@ -123,10 +123,11 @@ fn file_search_worker(
                 Err(mpsc::RecvTimeoutError::Disconnected) => return,
             }
         }
-        let entries = search_everything(everything.as_ref(), &folders, &query).unwrap_or_else(|| {
-            let entries = index.get_or_init(|| build_fallback_index(search_roots(&folders)));
-            rank_entries(entries.iter(), &query)
-        });
+        let entries =
+            search_everything(everything.as_ref(), &folders, &query).unwrap_or_else(|| {
+                let entries = index.get_or_init(|| build_fallback_index(search_roots(&folders)));
+                rank_entries(entries.iter(), &query)
+            });
         if let Ok(mut state) = search.lock() {
             if state.requested == query {
                 state.completed = query;
