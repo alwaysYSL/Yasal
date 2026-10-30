@@ -1,3 +1,5 @@
+**Bahasa:** [English](README.md) · Indonesia
+
 # 🌸 Yasal (يسأل)
 
 <div align="center">
@@ -125,6 +127,10 @@ Paket installer dan auto-updater belum tersedia; pemasangan, pembaruan, dan peng
 
 ---
 
-## 📄 Lisensi dan distribusi
+## 📄 Lisensi
 
-Source tree belum menyertakan berkas `LICENSE`; klaim lisensi MIT belum dapat diverifikasi. Jangan mendistribusikan aplikasi sebagai MIT sebelum pemegang hak cipta menetapkan dan menambahkan lisensi yang sesuai.
+Dilisensikan di bawah salah satu dari [Apache License 2.0](LICENSE-APACHE) atau [MIT License](LICENSE-MIT), sesuai pilihan Anda.
+
+Kontribusi yang Anda kirim dengan sengaja untuk disertakan di Yasal otomatis dilisensikan ganda seperti di atas, tanpa syarat tambahan. Lihat [CONTRIBUTING.md](CONTRIBUTING.md).
+
+`vendor/eframe` adalah salinan `eframe` 0.29.1 (MIT OR Apache-2.0, © Emil Ernerfeldt) dengan patch lokal. Berkas lisensi aslinya disertakan di folder itu.

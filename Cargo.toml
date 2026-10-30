@@ -3,6 +3,9 @@ name = "yasal"
 version = "0.1.0"
 edition = "2021"
 description = "Lightweight Windows Command Palette"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/alwaysYSL/Yasal"
+readme = "README.md"
 
 [dependencies]
 egui = "0.29"
