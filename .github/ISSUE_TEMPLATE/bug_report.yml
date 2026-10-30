@@ -1,0 +1,37 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Expected behavior and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact keys typed in the palette, plugin involved, and settings changed.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Yasal version or commit
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Relevant lines from `%LOCALAPPDATA%\Yasal\yasal_debug.log`. Remove personal paths first.
+      render: text
