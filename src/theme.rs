@@ -18,8 +18,8 @@ pub const SEARCH_BAR_PANEL_HEIGHT: f32 = 70.0;
 pub const SEARCH_BAR_RADIUS: f32 = SEARCH_BAR_HEIGHT / 2.0;
 pub const CONTENT_HORIZONTAL_MARGIN: f32 = 16.0;
 pub const CONTENT_VERTICAL_MARGIN: f32 = 8.0;
-pub const STATUS_BAR_PANEL_HEIGHT: f32 = 34.0;
-pub const STATUS_BAR_CONTENT_HEIGHT: f32 = 26.0;
+pub const STATUS_BAR_PANEL_HEIGHT: f32 = 38.0;
+pub const STATUS_BAR_CONTENT_HEIGHT: f32 = 30.0;
 pub const WINDOW_FIXED_HEIGHT: f32 =
     SEARCH_BAR_PANEL_HEIGHT + STATUS_BAR_PANEL_HEIGHT + CONTENT_VERTICAL_MARGIN * 2.0;
 /// Shortest visible card (search bar, one empty row area and footer).

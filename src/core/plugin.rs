@@ -54,4 +54,11 @@ pub trait Plugin: Send + Sync {
     fn query_prefixed(&self, input: &str) -> Vec<QueryResult> {
         self.query(input)
     }
+
+    /// Looks up one of this plugin's results by id, e.g. to rebuild the items the user
+    /// opens most. The default scans `query("")`; plugins whose empty query is capped
+    /// should override it.
+    fn find_by_id(&self, id: &str) -> Option<QueryResult> {
+        self.query("").into_iter().find(|result| result.id == id)
+    }
 }

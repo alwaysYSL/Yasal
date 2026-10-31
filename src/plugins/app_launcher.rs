@@ -213,107 +213,118 @@ impl Plugin for AppLauncherPlugin {
         matches.sort_unstable_by(|(_, left), (_, right)| right.cmp(left));
         matches.truncate(8);
 
-        let mut results = Vec::with_capacity(matches.len());
-        for (app, score) in matches {
-            let target = app.path.to_string_lossy().to_string();
-            let is_shell_app = is_shell_apps_folder_target(&target);
-            let path_for_launch = app.path.clone();
-            let target_for_launch = target.clone();
+        matches
+            .into_iter()
+            .map(|(app, score)| self.build_result(app, score))
+            .collect()
+    }
 
-            let primary_action: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
-                let opened = if is_shell_app {
-                    shell_execute("open", &target_for_launch)
-                } else {
-                    open::that_detached(&path_for_launch).is_ok()
-                };
-                if !opened {
-                    win32::show_error_dialog(
-                        "Aplikasi Tidak Dapat Dibuka",
-                        "Target aplikasi tidak tersedia atau shortcut sudah tidak valid.",
-                    );
-                }
-            });
+    fn find_by_id(&self, id: &str) -> Option<QueryResult> {
+        self.apps
+            .iter()
+            .find(|app| app.id == id)
+            .map(|app| self.build_result(app, 10))
+    }
+}
 
-            let (secondary_action, additional_actions) = if is_shell_app {
-                let target_for_copy = target.clone();
-                let apps_folder_action = ItemAction {
-                    label: "Buka daftar aplikasi Windows".to_string(),
-                    icon: "📁",
-                    shortcut_hint: None,
-                    action: Arc::new(|| {
-                        if !shell_execute("open", "shell:AppsFolder") {
-                            win32::show_error_dialog(
-                                "AppsFolder Tidak Dapat Dibuka",
-                                "Windows tidak dapat membuka daftar aplikasi.",
-                            );
-                        }
-                    }),
-                };
-                let copy_id_action = ItemAction {
-                    label: "Salin ID aplikasi".to_string(),
-                    icon: "📋",
-                    shortcut_hint: None,
-                    action: Arc::new(move || {
-                        let _ = set_clipboard_text(&target_for_copy);
-                    }),
-                };
-                (None, vec![apps_folder_action, copy_id_action])
+impl AppLauncherPlugin {
+    fn build_result(&self, app: &AppEntry, score: u32) -> QueryResult {
+        let target = app.path.to_string_lossy().to_string();
+        let is_shell_app = is_shell_apps_folder_target(&target);
+        let path_for_launch = app.path.clone();
+        let target_for_launch = target.clone();
+
+        let primary_action: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            let opened = if is_shell_app {
+                shell_execute("open", &target_for_launch)
             } else {
-                let path_for_admin = app.path.clone();
-                let path_for_folder = app.path.clone();
-                let path_for_copy = app.path.clone();
-                let admin_action = ItemAction {
-                    label: "Jalankan sebagai administrator".to_string(),
-                    icon: "🛡️",
-                    shortcut_hint: Some("Ctrl+Enter".to_string()),
-                    action: Arc::new(move || {
-                        if !shell_execute("runas", &path_for_admin.to_string_lossy()) {
-                            win32::show_error_dialog(
+                open::that_detached(&path_for_launch).is_ok()
+            };
+            if !opened {
+                win32::show_error_dialog(
+                    "Aplikasi Tidak Dapat Dibuka",
+                    "Target aplikasi tidak tersedia atau shortcut sudah tidak valid.",
+                );
+            }
+        });
+
+        let (secondary_action, additional_actions) = if is_shell_app {
+            let target_for_copy = target.clone();
+            let apps_folder_action = ItemAction {
+                label: "Buka daftar aplikasi Windows".to_string(),
+                icon: "📁",
+                shortcut_hint: None,
+                action: Arc::new(|| {
+                    if !shell_execute("open", "shell:AppsFolder") {
+                        win32::show_error_dialog(
+                            "AppsFolder Tidak Dapat Dibuka",
+                            "Windows tidak dapat membuka daftar aplikasi.",
+                        );
+                    }
+                }),
+            };
+            let copy_id_action = ItemAction {
+                label: "Salin ID aplikasi".to_string(),
+                icon: "📋",
+                shortcut_hint: None,
+                action: Arc::new(move || {
+                    let _ = set_clipboard_text(&target_for_copy);
+                }),
+            };
+            (None, vec![apps_folder_action, copy_id_action])
+        } else {
+            let path_for_admin = app.path.clone();
+            let path_for_folder = app.path.clone();
+            let path_for_copy = app.path.clone();
+            let admin_action = ItemAction {
+                label: "Jalankan sebagai administrator".to_string(),
+                icon: "🛡️",
+                shortcut_hint: Some("Ctrl+Enter".to_string()),
+                action: Arc::new(move || {
+                    if !shell_execute("runas", &path_for_admin.to_string_lossy()) {
+                        win32::show_error_dialog(
                                 "Aplikasi Tidak Dapat Dijalankan",
                                 "Windows menolak atau gagal menjalankan aplikasi sebagai administrator.",
                             );
-                        }
-                    }),
-                };
-                let folder_action = ItemAction {
-                    label: "Buka Lokasi Folder".to_string(),
-                    icon: "📁",
-                    shortcut_hint: None,
-                    action: Arc::new(move || {
-                        if let Some(parent) = path_for_folder.parent() {
-                            let _ = open::that_detached(parent);
-                        }
-                    }),
-                };
-                let copy_path_action = ItemAction {
-                    label: "Salin Path File".to_string(),
-                    icon: "📋",
-                    shortcut_hint: None,
-                    action: Arc::new(move || {
-                        let path_str = path_for_copy.to_string_lossy().to_string();
-                        let _ = set_clipboard_text(&path_str);
-                    }),
-                };
-                (
-                    Some(admin_action.clone()),
-                    vec![admin_action, folder_action, copy_path_action],
-                )
+                    }
+                }),
             };
+            let folder_action = ItemAction {
+                label: "Buka Lokasi Folder".to_string(),
+                icon: "📁",
+                shortcut_hint: None,
+                action: Arc::new(move || {
+                    if let Some(parent) = path_for_folder.parent() {
+                        let _ = open::that_detached(parent);
+                    }
+                }),
+            };
+            let copy_path_action = ItemAction {
+                label: "Salin Path File".to_string(),
+                icon: "📋",
+                shortcut_hint: None,
+                action: Arc::new(move || {
+                    let path_str = path_for_copy.to_string_lossy().to_string();
+                    let _ = set_clipboard_text(&path_str);
+                }),
+            };
+            (
+                Some(admin_action.clone()),
+                vec![admin_action, folder_action, copy_path_action],
+            )
+        };
 
-            results.push(QueryResult {
-                id: app.id.clone(),
-                title: app.name.clone(),
-                subtitle: Some(target.clone()),
-                category: "Aplikasi".to_string(),
-                icon: ItemIcon::App(target),
-                score,
-                primary_action,
-                secondary_action,
-                additional_actions,
-            });
+        QueryResult {
+            id: app.id.clone(),
+            title: app.name.clone(),
+            subtitle: Some(target.clone()),
+            category: "Aplikasi".to_string(),
+            icon: ItemIcon::App(target),
+            score,
+            primary_action,
+            secondary_action,
+            additional_actions,
         }
-
-        results
     }
 }
 
