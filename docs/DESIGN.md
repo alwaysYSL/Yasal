@@ -1,6 +1,6 @@
 # 🌸 Yasal — UI/UX Design
 
-> Dokumen ini mencatat perilaku UI/UX yang tersedia saat ini. Rencana historis tersimpan di [`archive/implementation_plan.md`](archive/implementation_plan.md); status dan batas implementasi diverifikasi terhadap source.
+> Dokumen ini mencatat perilaku UI/UX yang tersedia saat ini. Status dan batas implementasi diverifikasi terhadap source.
 
 ---
 
@@ -153,9 +153,7 @@ Settings dibuka dengan `settings` atau menu system tray. Search bar menyaring ju
 ✅ Pengosongan Recycle Bin tanpa dialog; konfirmasi native untuk shutdown/restart/sign out.
 
 Material Acrylic/Mica, color picker, installer, dan auto-updater belum tersedia.
-[docs/archive/implementation_plan.md#6A71]
-PUT 7.=7:
-Command palette untuk Windows yang dibangun dengan **Rust**. Dokumen ini adalah rencana historis; target RAM dan perbandingan produk di bawah merupakan sasaran/catatan lama, bukan hasil ukur atau klaim saat ini.
+
 ---
 
 ## 11. Roadmap

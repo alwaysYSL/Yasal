@@ -25,7 +25,7 @@ cargo run
 - `src/plugins/`: one file per plugin. See `docs/DESIGN.md` before adding one.
 - `src/platform/`: Win32, hotkey, tray.
 - `src/ui/`: egui views.
-- `vendor/eframe/`: patched `eframe` 0.29.1. Avoid touching it; if a change is needed, note it in the PR.
+- `vendor/eframe/`: patched `eframe` 0.29.1. The patch is described in `docs/CPU_OPTIMIZATION.md` (Indonesian). Avoid touching it; if a change is needed, note it in the PR.
 
 ## Security
 
