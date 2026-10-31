@@ -67,7 +67,8 @@ pub fn render_status_bar(
     let cap_height = 20.0;
     let cap_pad_x = 7.0;
     let mut x = rect.left() + 4.0;
-    let center_y = rect.center().y + 1.0;
+    // Slightly below the centre so the key caps keep clear of the divider line.
+    let center_y = rect.center().y + 2.0;
 
     for (key, label) in hints_for(view_mode, selected_category) {
         // The bundled fonts have no arrow glyphs, so the arrow cap is drawn with shapes.

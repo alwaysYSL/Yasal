@@ -15,12 +15,37 @@ fn test_fuzzy_matcher() {
 
 #[test]
 fn test_frecency_ranking() {
-    let mut store = FrecencyStore::new();
+    let mut store = FrecencyStore::in_memory();
     store.record_use("app:vscode");
     store.record_use("app:vscode");
     store.record_use("app:notepad");
     let top = store.get_top_frequent(2);
     assert_eq!(top[0], "app:vscode");
+}
+
+#[test]
+fn empty_state_ranks_by_frecency_and_skips_unknown_ids() {
+    use std::sync::Arc;
+    use yasal::plugins::app_launcher::AppLauncherPlugin;
+
+    // More apps than the launcher returns for an empty query, so the ones the user
+    // opens most are not among its first results.
+    let apps: Vec<(String, String)> = (0..12)
+        .map(|i| (format!("App {i:02}"), format!(r"C:\apps\app{i:02}.lnk")))
+        .collect();
+    let mut store = FrecencyStore::in_memory();
+    for _ in 0..3 {
+        store.record_use("app:gone"); // no plugin returns this id
+    }
+    store.record_use("app:app 11");
+    store.record_use("app:app 11");
+    store.record_use("app:app 10");
+
+    let mut dispatcher = Dispatcher::with_frecency(store);
+    dispatcher.register(Arc::new(AppLauncherPlugin::new_with_mock(apps)));
+
+    let ids: Vec<String> = dispatcher.dispatch("").into_iter().map(|r| r.id).collect();
+    assert_eq!(ids, ["app:app 11", "app:app 10"]);
 }
 
 #[test]

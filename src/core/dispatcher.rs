@@ -2,6 +2,8 @@ use crate::core::frecency::FrecencyStore;
 use crate::core::plugin::{Plugin, QueryResult};
 use std::sync::Arc;
 
+const EMPTY_STATE_LIMIT: usize = 5;
+
 pub struct Dispatcher {
     plugins: Vec<Arc<dyn Plugin>>,
     frecency: FrecencyStore,
@@ -9,9 +11,13 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     pub fn new() -> Self {
+        Self::with_frecency(FrecencyStore::new())
+    }
+
+    pub fn with_frecency(frecency: FrecencyStore) -> Self {
         Self {
             plugins: Vec::new(),
-            frecency: FrecencyStore::new(),
+            frecency,
         }
     }
 
@@ -109,32 +115,29 @@ impl Dispatcher {
         self.frecency.record_use(item_id);
     }
 
+    /// Most used items first. Ids that no plugin returns any more (an uninstalled app,
+    /// a removed plugin) are skipped so they cannot take a slot.
     fn get_empty_state_results(&self) -> Vec<QueryResult> {
-        let top_ids = self.frecency.get_top_frequent(5);
-        if top_ids.is_empty() {
-            // When frecency history is empty on first run, show the first 5 indexed apps
-            for plugin in &self.plugins {
-                if plugin.id() == "app_launcher" {
-                    let mut apps = plugin.query("");
-                    apps.truncate(5);
-                    return apps;
-                }
+        let mut results = Vec::new();
+        for id in self.frecency.get_top_frequent(usize::MAX) {
+            let found = self
+                .plugins
+                .iter()
+                .filter(|plugin| plugin.is_global())
+                .find_map(|plugin| plugin.find_by_id(&id));
+            results.extend(found);
+            if results.len() == EMPTY_STATE_LIMIT {
+                break;
             }
-            return Vec::new();
         }
 
-        let mut results = Vec::new();
-        for plugin in &self.plugins {
-            if plugin.is_global() {
-                let all_items = plugin.query("");
-                for item in all_items {
-                    if top_ids.contains(&item.id) {
-                        results.push(item);
-                    }
-                }
+        // No usable history yet (first run): show the first few indexed apps.
+        if results.is_empty() {
+            if let Some(launcher) = self.plugins.iter().find(|p| p.id() == "app_launcher") {
+                results = launcher.query("");
+                results.truncate(EMPTY_STATE_LIMIT);
             }
         }
-        results.truncate(5);
         results
     }
 }

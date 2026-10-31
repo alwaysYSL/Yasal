@@ -33,6 +33,15 @@ impl FrecencyStore {
         Self { data, file_path }
     }
 
+    /// A store that never reads or writes disk. Tests use it so they cannot touch the
+    /// user's real history.
+    pub fn in_memory() -> Self {
+        Self {
+            data: FrecencyData::default(),
+            file_path: None,
+        }
+    }
+
     fn now_secs() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
