@@ -210,12 +210,14 @@ pub fn palette_origin(
     (x, y)
 }
 
+type MonitorWorkArea = ((i32, i32, i32, i32), Option<u32>);
+
 /// Work area (left, top, width, height) and DPI scale of the monitor under the mouse
 /// cursor, i.e. the monitor the user is currently working on.
 ///
 /// Falls back to the primary monitor when the cursor position or monitor info cannot
 /// be read. The DPI is `None` if it is unavailable.
-fn active_monitor_work_area() -> Option<((i32, i32, i32, i32), Option<u32>)> {
+fn active_monitor_work_area() -> Option<MonitorWorkArea> {
     unsafe {
         let mut cursor = POINT::default();
         let _ = GetCursorPos(&mut cursor);
@@ -404,14 +406,16 @@ fn extract_icon_once(app_path: &Path, out_png_path: &Path) -> bool {
             return false;
         }
 
-        let mut bitmap_info = BITMAPINFO::default();
-        bitmap_info.bmiHeader = BITMAPINFOHEADER {
-            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: ICON_SIZE,
-            biHeight: -ICON_SIZE,
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB.0,
+        let bitmap_info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: ICON_SIZE,
+                biHeight: -ICON_SIZE,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -462,8 +466,8 @@ fn extract_icon_once(app_path: &Path, out_png_path: &Path) -> bool {
             return false;
         }
 
-        let has_alpha = rgba.chunks_exact(4).any(|pixel| pixel[3] != 0);
-        for pixel in rgba.chunks_exact_mut(4) {
+        let has_alpha = rgba.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0);
+        for pixel in rgba.as_chunks_mut::<4>().0 {
             pixel.swap(0, 2);
             if !has_alpha && pixel[..3] != [0, 0, 0] {
                 pixel[3] = 255;
@@ -782,7 +786,7 @@ unsafe fn describe_window(hwnd: HWND) -> Option<WindowInfo> {
     let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
     let is_tool_window = ex_style & WS_EX_TOOLWINDOW.0 != 0;
     let is_app_window = ex_style & WS_EX_APPWINDOW.0 != 0;
-    let has_owner = GetWindow(hwnd, GW_OWNER).map_or(false, |owner| !owner.0.is_null());
+    let has_owner = GetWindow(hwnd, GW_OWNER).is_ok_and(|owner| !owner.0.is_null());
     if (is_tool_window || has_owner) && !is_app_window {
         return None;
     }

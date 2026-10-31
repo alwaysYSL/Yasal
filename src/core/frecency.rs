@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const HALF_LIFE_HOURS: f64 = 72.0; // 3 days half-life decay
-const LAMBDA: f64 = 0.693147 / (HALF_LIFE_HOURS * 3600.0); // decay constant per second
+const LAMBDA: f64 = std::f64::consts::LN_2 / (HALF_LIFE_HOURS * 3600.0); // decay constant per second
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct FrecencyData {

@@ -56,16 +56,14 @@ fn parse_hotkey(value: &str) -> Option<HotkeySpec> {
         VK_SPACE.0 as u32
     } else if uppercase.len() == 1 && uppercase.as_bytes()[0].is_ascii_alphanumeric() {
         uppercase.as_bytes()[0] as u32
-    } else if let Some(number) = uppercase
-        .strip_prefix('F')
-        .and_then(|n| n.parse::<u32>().ok())
-    {
+    } else {
+        let number = uppercase
+            .strip_prefix('F')
+            .and_then(|n| n.parse::<u32>().ok())?;
         if !(1..=12).contains(&number) {
             return None;
         }
         0x70 + number - 1
-    } else {
-        return None;
     };
     Some(HotkeySpec { modifiers, key })
 }

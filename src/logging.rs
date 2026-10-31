@@ -20,7 +20,7 @@ fn log_path() -> PathBuf {
 /// past 512 KB so it can never grow without bound. Failures are ignored on purpose.
 pub fn log(msg: &str) {
     let path = log_path();
-    let too_large = fs::metadata(&path).map_or(false, |meta| meta.len() > MAX_LOG_BYTES);
+    let too_large = fs::metadata(&path).is_ok_and(|meta| meta.len() > MAX_LOG_BYTES);
 
     let mut options = OpenOptions::new();
     options.create(true);
