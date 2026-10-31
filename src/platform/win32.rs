@@ -386,6 +386,12 @@ fn extract_icon_once(app_path: &Path, out_png_path: &Path) -> bool {
         .chain(std::iter::once(0))
         .collect();
 
+    // Packaged (UWP) apps and AppsFolder-only entries have no file path that
+    // SHGetFileInfoW can resolve; ask the shell item itself for its image.
+    if is_shell_apps_folder_path(app_path) {
+        return extract_shell_item_icon(&wide_path, out_png_path);
+    }
+
     unsafe {
         let mut file_info = SHFILEINFOW::default();
         if SHGetFileInfoW(
@@ -474,20 +480,119 @@ fn extract_icon_once(app_path: &Path, out_png_path: &Path) -> bool {
             }
         }
 
-        if let Some(parent) = out_png_path.parent() {
-            if std::fs::create_dir_all(parent).is_err() {
-                return false;
+        save_icon_png(&rgba, ICON_SIZE as u32, ICON_SIZE as u32, out_png_path)
+    }
+}
+
+fn is_shell_apps_folder_path(path: &Path) -> bool {
+    path.to_str()
+        .and_then(|text| text.get(..17))
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(r"shell:AppsFolder\"))
+}
+
+/// Writes straight-alpha RGBA pixels as a PNG, creating the cache directory if needed.
+fn save_icon_png(rgba: &[u8], width: u32, height: u32, out_png_path: &Path) -> bool {
+    if let Some(parent) = out_png_path.parent() {
+        if std::fs::create_dir_all(parent).is_err() {
+            return false;
+        }
+    }
+    image::save_buffer(out_png_path, rgba, width, height, image::ColorType::Rgba8).is_ok()
+}
+
+/// Converts the shell's 32-bit BGRA bitmap to straight RGBA in place. Shell images carry
+/// premultiplied alpha; a bitmap with no alpha at all is treated as fully opaque.
+fn shell_bgra_to_rgba(pixels: &mut [u8]) {
+    let has_alpha = pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0);
+    for pixel in pixels.as_chunks_mut::<4>().0 {
+        let [b, g, r, a] = *pixel;
+        if !has_alpha {
+            *pixel = [r, g, b, 255];
+            continue;
+        }
+        let straight = |channel: u8| match a {
+            0 => 0,
+            _ => ((u32::from(channel) * 255 + u32::from(a) / 2) / u32::from(a)).min(255) as u8,
+        };
+        *pixel = [straight(r), straight(g), straight(b), a];
+    }
+}
+
+/// Extracts the icon of a `shell:AppsFolder\...` entry through `IShellItemImageFactory`.
+fn extract_shell_item_icon(wide_path: &[u16], out_png_path: &Path) -> bool {
+    use windows::Win32::Foundation::SIZE;
+    use windows::Win32::Graphics::Gdi::{GetDIBits, GetObjectW, BITMAP};
+    use windows::Win32::UI::Shell::{
+        IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_ICONONLY,
+    };
+
+    const ICON_SIZE: i32 = 64;
+
+    unsafe {
+        let Ok(factory) = SHCreateItemFromParsingName::<_, _, IShellItemImageFactory>(
+            PCWSTR(wide_path.as_ptr()),
+            None,
+        ) else {
+            return false;
+        };
+        let Ok(bitmap) = factory.GetImage(
+            SIZE {
+                cx: ICON_SIZE,
+                cy: ICON_SIZE,
+            },
+            SIIGBF_ICONONLY,
+        ) else {
+            return false;
+        };
+
+        // Read the real size back instead of assuming the requested one.
+        let mut described = BITMAP::default();
+        let sized = GetObjectW(
+            bitmap,
+            std::mem::size_of::<BITMAP>() as i32,
+            Some(std::ptr::addr_of_mut!(described).cast()),
+        ) != 0;
+        let (width, height) = (described.bmWidth, described.bmHeight);
+
+        let dc = CreateCompatibleDC(None);
+        let mut pixels = Vec::new();
+        if sized && width > 0 && height > 0 && !dc.is_invalid() {
+            let mut info = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    biWidth: width,
+                    biHeight: -height, // negative: top-down rows
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    biCompression: BI_RGB.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            pixels = vec![0u8; (width * height * 4) as usize];
+            let rows = GetDIBits(
+                dc,
+                bitmap,
+                0,
+                height as u32,
+                Some(pixels.as_mut_ptr().cast()),
+                &mut info,
+                DIB_RGB_COLORS,
+            );
+            if rows == 0 {
+                pixels.clear();
             }
         }
+        if !dc.is_invalid() {
+            let _ = DeleteDC(dc);
+        }
+        let _ = DeleteObject(bitmap);
 
-        image::save_buffer(
-            out_png_path,
-            &rgba,
-            ICON_SIZE as u32,
-            ICON_SIZE as u32,
-            image::ColorType::Rgba8,
-        )
-        .is_ok()
+        if pixels.is_empty() {
+            return false;
+        }
+        shell_bgra_to_rgba(&mut pixels);
+        save_icon_png(&pixels, width as u32, height as u32, out_png_path)
     }
 }
 
@@ -903,5 +1008,37 @@ pub fn pick_folder(owner_raw: isize) -> Option<std::path::PathBuf> {
         let path = display.to_string().ok();
         CoTaskMemFree(Some(display.0 as *const _));
         path.map(std::path::PathBuf::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_bitmap_is_unpremultiplied_and_reordered_to_rgba() {
+        // BGRA with 50% alpha, premultiplied: r=50 g=100 b=25 becomes 100/199/50.
+        // A fully transparent pixel must stay transparent, not divide by zero.
+        let mut pixels = [25, 100, 50, 128, 9, 9, 9, 0];
+        shell_bgra_to_rgba(&mut pixels);
+        assert_eq!(pixels, [100, 199, 50, 128, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn shell_bitmap_without_any_alpha_becomes_opaque() {
+        let mut pixels = [30, 20, 10, 0];
+        shell_bgra_to_rgba(&mut pixels);
+        assert_eq!(pixels, [10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn apps_folder_paths_are_detected_case_insensitively() {
+        assert!(is_shell_apps_folder_path(Path::new(
+            r"SHELL:APPSFOLDER\Contoso!App"
+        )));
+        assert!(!is_shell_apps_folder_path(Path::new(
+            r"C:\Windows\notepad.exe"
+        )));
+        assert!(!is_shell_apps_folder_path(Path::new("shell:AppsFolder")));
     }
 }
