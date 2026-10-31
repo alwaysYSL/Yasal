@@ -15,9 +15,11 @@ fn test_config_defaults() {
 
 #[test]
 fn test_config_serde_roundtrip() {
-    let mut cfg = AppConfig::default();
-    cfg.hotkey = "Ctrl+Space".to_string();
-    cfg.theme = ThemePreference::Dark;
+    let cfg = AppConfig {
+        hotkey: "Ctrl+Space".to_string(),
+        theme: ThemePreference::Dark,
+        ..Default::default()
+    };
 
     let json = serde_json::to_string(&cfg).unwrap();
     let parsed: AppConfig = serde_json::from_str(&json).unwrap();
